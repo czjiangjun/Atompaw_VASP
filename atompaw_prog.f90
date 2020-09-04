@@ -74,15 +74,50 @@ PROGRAM atompaw
      CALL Report_Atomres('SC',Grid,FCOrbit,FCPot,FCSCF,ifen)
   else
      CALL SCFatom_Init(ifinput)
-!     CALL SCFatom('AE',lotsofoutput)
-!     OPEN (ifen, file=TRIM(AEPot%sym), form='formatted')
-!     CALL Report_Atomres('AE',Grid,AEOrbit,AEPot,AESCF,ifen)
-!     CALL SCFatom('SC',lotsofoutput,ifinput)
-!     CALL Report_Atomres('SC',Grid,FCOrbit,FCPot,FCSCF,ifen)
-!     if (saveaeatom) then
-!        Call Dump_AEatom(TRIM(outputfile),&
-!          Grid,AEOrbit,AEpot,AESCF,FCOrbit,FCpot,FCSCF,FC)
-!     endif
+     CALL SCFatom('AE',lotsofoutput)
+     OPEN (ifen, file=TRIM(AEPot%sym), form='formatted')
+     CALL Report_Atomres('AE',Grid,AEOrbit,AEPot,AESCF,ifen)
+     CALL SCFatom('SC',lotsofoutput,ifinput)
+     CALL Report_Atomres('SC',Grid,FCOrbit,FCPot,FCSCF,ifen)
+     if (saveaeatom) then
+        Call Dump_AEatom(TRIM(outputfile),&
+          Grid,AEOrbit,AEpot,AESCF,FCOrbit,FCpot,FCSCF,FC)
+     endif
   endif
+
+  CALL SetPAWOptions1(ifinput,ifen,Grid)
+  CALL InitPAW(PAW,Grid,FCOrbit)
+  CALL setbasis(Grid,FCPot,FCOrbit,ifinput)
+!  Call setcoretail(Grid,FC%coreden)
+  Call setcoretail2(Grid,FC%coreden)
+  If (TRIM(FCorbit%exctype)=='HF'.or.TRIM(FCorbit%exctype)=='EXXKLI') PAW%tcore=0
+  If (TRIM(FCorbit%exctype)=='EXXKLI') Call fixtcorewfn(Grid,PAW)
+!  Call SetPAWOptions2(ifinput,ifen,Grid,FCOrbit,FCPot,OK)
+!  If (.not.OK) stop 'Stopping due to options failure'
+!  Call Report_Pseudobasis(Grid,PAW,ifen)
+
+!  Call Set_PAW_MatrixElements(Grid,PAW)
+!  CALL logderiv(Grid,FCPot,PAW)
+!  CALL ftprod(Grid)
+
+!  CALL FindVlocfromVeff(Grid,FCOrbit,PAW)
+!  CALL Report_Pseudopotential(Grid,PAW)
+
+!  CALL SPMatrixElements(Grid,FCPot,FC,PAW)
+!  CALL Report_pseudo_energies(PAW,6)
+!  CALL Report_pseudo_energies(PAW,ifen)
+
+  CLOSE(ifinput)
+  CLOSE(ifen)
+
+!! Free Memory
+  Call DestroyGrid(Grid)
+  Call DestroyOrbit(AEOrbit)
+  Call DestroyOrbit(FCOrbit)
+  Call DestroyPot(AEPot)
+  Call DestroyPot(FCPot)
+  Call DestroyPAW(PAW)
+  Call DestroyFC(FC)
+  if (have_libxc) call libxc_end()
 
 END PROGRAM atompaw

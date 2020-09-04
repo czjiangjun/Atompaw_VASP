@@ -1946,7 +1946,8 @@ CONTAINS
      REAL(8) :: h0,dh,f,df
      INTEGER :: i,j,k
 
-     hval=log((Z*range/r0 + 1.d0))/(n-1)
+!     hval=log((Z*range/r0 + 1.d0))/(n-1)
+     hval=log((Z*range/r0))/(n-1)
 
   end subroutine findh_given_r0
 
@@ -2065,8 +2066,8 @@ CONTAINS
 !       n=LOG(range/r0+1)/h+1
        n=LOG(range/r0)/h+1
        Grid%ishift=5
-!       IF (r0*(EXP(h*(n-1))-1)<range-1.d-5) n=n+1
-       IF (r0*(EXP(h*(n-1)))<range-1.d-5) n=n+1
+       IF (r0*(EXP(h*(n-1))-1)<range-1.d-5) n=n+1
+!       IF (r0*(EXP(h*(n-1)))<range-1.d-5) n=n+1
        Grid%h=h
        Grid%n=n
        WRITE(6,*) 'InitGrid: -- logarithmic ',n, h,range,r0

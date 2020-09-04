@@ -986,6 +986,137 @@ CONTAINS
     END SUBROUTINE setcoretail
 
 
+    SUBROUTINE setcoretail2(Grid,coreden)
+      TYPE(GridInfo), INTENT(IN) :: Grid
+      REAL(8), INTENT(IN) :: coreden(:)
+
+      REAL(8) :: rc,h,logderiv(2),q(2),Ci(2),aa(2,2)
+      REAL(8) :: root1,root2, xx, g, gp, gpp, yy, x, z
+      REAL(8), allocatable :: d1(:),d2(:),coredenpr(:)
+      REAL(8), allocatable :: kv(:)
+      INTEGER :: i,j,k,n,irc,icount
+      LOGICAL :: success
+
+      n=Grid%n
+      h=Grid%h
+      irc=PAW%irc_core
+      rc=PAW%rc_core
+
+      allocate(coredenpr(n), stat=i)
+          if (i /= 0) then
+             write(6,*) 'setcoretail: allocation error -- ', n,i
+             stop
+          endif
+
+      do i=1,n
+        coredenpr(i)=coreden(i)/Grid%r(i)
+      enddo
+
+      allocate(d1(n),d2(n),kv(n), stat=i)
+          if (i /= 0) then
+             write(6,*) 'setcoretail: allocation error -- ', n,i
+             stop
+          endif
+      CALL derivative(Grid,coredenpr,d1)
+      CALL derivative(Grid,d1,d2)
+      call solvbes(kv, 1.d0, 0.d0, 0, 2)
+
+      DO i =1,2
+!        logderiv(i)=Gfirstderiv(Grid, irc-i+1, coredenpr)/coredenpr(irc-i+1)
+!      write(6,*) 'logderiv=', logderiv(i)
+         logderiv(i)=d1(irc-i+1)/coredenpr(irc-i+1)
+!      write(6,*) 'logderiv=', logderiv(i)
+
+
+        IF (i==1) THEN
+           root1 = 0.001d0; root2=kv(1)-0.001d0 
+           xx=0.5d0*(root1+root2)
+        ELSE
+           root1 =kv(1)+0.001d0; root2=kv(2)-0.001d0 
+           xx=0.5d0*(root1+root2)
+        ENDIF
+
+!        write(6,*) 'xx0=', xx
+
+        icount=0
+        DO
+          call jbessel(g,gp,gpp,0,2,xx)
+          yy=(logderiv(i)-(1.d0/xx+gp/g))/(-1.0/xx**2+gpp/g-(gp/g)**2)
+          IF( abs(yy) < 1.d-6) THEN
+!                  write(6,*) 'exiting Bessel loop', icount,xx,yy
+                  exit
+          ELSE
+                  IF (xx+yy>root2) THEN
+                          xx=0.5*(xx+root2)
+                  ELSE IF (xx+yy < root1) THEN
+                          xx=0.5*(xx+root1)
+                  ELSE
+                          xx=xx+yy
+                  ENDIF
+          ENDIF
+          icount=icount+1
+          IF (icount>1000) THEN
+                  write(6,*) 'Giving up on Bessel root'
+                  return
+          ENDIF
+        ENDDO
+
+        success= .TRUE.
+        q(i) = xx/Grid%r(irc-i+1)
+!        write(6,*) 'Found Bessel root at q_i', q(i)
+      ENDDO
+
+!      q(1)=q(1)/rc
+!      q(2)=q(2)/Grid%r(irc+1)
+
+      Ci(1:2)=0.d0; aa(1:2,1:2)=0.d0
+
+      DO i=1,2
+!        Ci(i)=coredenpr(irc-i+1)
+!        aa(i,1:2)=sin(q(1:2)*Grid%r(irc-i+1))!/Grid%r(irc-i+1)
+        Ci(i)=coredenpr(irc-i+1)/Grid%r(irc-i+1)
+        aa(i,1:2)=sin(q(1:2)*Grid%r(irc-i+1))/Grid%r(irc-i+1)
+      ENDDO
+!      WRITE(6,*) 'Ci=', (Ci(i),i=1,2)
+!      WRITE(6,*) 'ai=', (aa(i,1),i=1,2)
+!      write(6,*) (aa(2,2)*Ci(1)-aa(1,2)*Ci(2))/(aa(1,1)*aa(2,2)-aa(1,2)*aa(2,1))
+!      write(6,*) (aa(2,1)*Ci(1)-aa(1,1)*Ci(2))/(aa(1,2)*aa(2,1)-aa(1,1)*aa(2,2))
+!      call SolveAXeqBM(2, aa, Ci,1)
+      call SolveAXeqB(2, aa, Ci)
+!      write(6,*) 'Completed SolveAXeqB with coefficients'
+!      write(6,*) (Ci(i),i=1,2)
+!      WRITE(6,*) 'Ci=',Ci(1)*sin(q(1)*Grid%r(irc))+Ci(2)*sin(q(2)*Grid%r(irc))
+!      WRITE(6,*) 'Ci=',Ci(1)*sin(q(1)*Grid%r(irc-1))+Ci(2)*sin(q(2)*Grid%r(irc-1))
+       
+      x=coreden(irc)
+
+!      write(6,*) 'setcoretail: u0,u2,u4 = ', u0,u2,u4
+
+      PAW%core=coreden
+      PAW%tcore=coreden
+
+      DO i=1,irc
+         PAW%tcore(i)=sum(Ci(1:2)*(sin(q(1:2)*Grid%r(i))/Grid%r(i)))*Grid%r(i)**2
+!         PAW%tcore(i)=sum(Ci(1:2)*(sin(q(1:2)*Grid%r(i))/Grid%r(i)))*Grid%r(i)
+      ENDDO
+
+  ! Find coretailpoints
+     z = integrator(Grid,coreden)
+
+     coretailpoints=irc+Grid%ishift
+        do i=irc+Grid%ishift,n
+           if(ABS(z-integrator(Grid,coreden,1,i))<coretailtol) then
+             coretailpoints=i
+             exit
+           endif
+        enddo
+     write(6,*) 'coretailpoints = ',coretailpoints
+     PAW%coretailpoints=coretailpoints
+
+      deallocate(d1,d2,coredenpr, kv)
+    END SUBROUTINE setcoretail2
+
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !   Set smooth core functions for EXXKLI case  using proceedure
 !      identical to HF
@@ -1160,7 +1291,7 @@ CONTAINS
     ENDIF
 
     WRITE(6,*) '  basis functions:'
-    WRITE(6,*)' No.   n     l         energy         occ   '
+    WRITE(6,*)'   No.    n     l         energy         occ   '
 
     nbase=0
     DO l=0,lmax
@@ -1175,7 +1306,7 @@ CONTAINS
              PAW%np(nbase)=Orbit%np(io)
              PAW%l(nbase)=l
              PAW%nodes(nbase)=PAW%np(nbase)-l-1
-             write (6,*) 'l,nbase,node',l,nbase,currentnode
+!             write (6,'(a,/,3i6)') ' nbase,    l,  node',nbase,l,currentnode
              PAW%eig(nbase)=Orbit%eig(io)
              PAW%occ(nbase)=Orbit%occ(io)
              PAW%phi(:,nbase)=Orbit%wfn(:,io)
@@ -1217,7 +1348,7 @@ CONTAINS
           PAW%np(nbase)=999
           PAW%nodes(nbase)=currentnode+1
           currentnode=PAW%nodes(nbase)
-          write (6,*) 'l,nbase,node',l,nbase,currentnode
+          write (6,'(a)') ' nbase,  node,    l'!,nbase,l,currentnode
           PAW%eig(nbase)=energy
           PAW%occ(nbase)=0.d0
           PAW%phi(1:n,nbase)=0.d0
@@ -1234,7 +1365,9 @@ CONTAINS
           rat=DSIGN(rat,PAW%phi(irc,nbase))
           PAW%phi(1:n,nbase)=PAW%phi(1:n,nbase)/rat
           !IF(Orbit%exctype=='HF') PAW%lmbd(:,nbase)=PAW%lmbd(:,nbase)/rat
-          WRITE(6,'(3i6,1p,2e15.6)') nbase,PAW%np(nbase),l,             &
+!          WRITE(6,'(3i6,1p,2e15.6)') nbase,PAW%np(nbase),l,             &
+!&              PAW%eig(nbase),PAW%occ(nbase)
+          WRITE(6,'(3i6,1p,2e15.6)') nbase,PAW%nodes(nbase),l,             &
 &              PAW%eig(nbase),PAW%occ(nbase)
           nbl=nbl+1
        ENDDO generalizedloop
