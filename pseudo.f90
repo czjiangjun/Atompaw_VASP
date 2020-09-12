@@ -355,7 +355,8 @@ CONTAINS
    ELSE IF (Projectorindex==HARTREE_FOCK) THEN
     CALL make_hf_tp_only(Grid,Pot,PAW,ifinput)
    ELSE IF (Projectorindex==MODRRKJ) THEN
-    CALL makebasis_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
+!    CALL makebasis_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
+    CALL VASP_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
    ENDIF
 
       WRITE(ifen,*) TRIM(PAW%Vloc_description)
@@ -1646,6 +1647,344 @@ CONTAINS
     endif
 
   END SUBROUTINE makebasis_custom
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!! VASP_modrrkj
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  SUBROUTINE VASP_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
+    TYPE(GridInfo), INTENT(IN) :: Grid
+    TYPE(PotentialInfo), INTENT(IN) :: Pot
+    INTEGER, INTENT(IN) :: Orthoindex,ifinput
+
+    INTEGER :: i,j,k,l,io,jo,ok,lmax,nbase,n,irc,irc_vloc,nr,np,thisrc
+    INTEGER :: icount,jcount,istart,ifinish,ibase,jbase,lprev
+    INTEGER :: match=5
+    REAL(8) :: dk
+    REAL(8) :: choice,rc,xx,yy,gg,g,gp,gpp,al(2),ql(2),root1,root2,logderiv
+    INTEGER, ALLOCATABLE :: omap(:),rcindex(:)
+    REAL(8), ALLOCATABLE :: VNC(:),Ci(:),aa(:,:),ai(:,:),jl(:,:),kv(:)
+    REAL(8), ALLOCATABLE :: f(:),rcval(:)
+    REAL(8), ALLOCATABLE :: U(:,:),VT(:,:),WORK(:),S(:),X(:,:)
+    INTEGER :: LWORK
+    REAL(8), POINTER  :: r(:)
+    CHARACTER(132) :: inputline
+    LOGICAL :: success
+
+    success=.false.
+    n=Grid%n
+    r=>Grid%r
+    irc=PAW%irc
+    irc_vloc=PAW%irc_vloc
+    nbase=PAW%nbase
+    lmax=PAW%lmax
+
+    ALLOCATE(rcindex(nbase),rcval(nbase))
+
+  !  Input matching radii for each basis function
+
+      call readmatchradius(Grid,ifinput,rcindex,rcval)
+
+
+  ! Set screened local pseudopotential
+    allocate(VNC(n),stat=i)
+    if (i/=0) stop 'allocation error in make_modrrkj'
+    VNC(2:n)=PAW%rveff(2:n)/r(2:n)
+    call extrapolate(Grid,VNC)
+
+
+    allocate(kv(match),jl(n,match),f(n),Ci(match),aa(match,match))
+    if (i/=0) stop 'allocation error in make_nrecipe'
+  ! Loop on basis elements
+    lprev=-1;np=0
+    do io=1,nbase
+
+       PAW%Kop(1,io)=0
+       PAW%Kop(2:n,io)=(PAW%eig(io)-Pot%rv(2:n)/Grid%r(2:n))*PAW%phi(2:n,io)
+
+       l=PAW%l(io)
+       if (l==lprev) then
+         np=np+1
+       else
+         np=1
+         lprev=l
+       endif
+
+       thisrc=rcindex(io)
+       rc=rcval(io);PAW%rcio(io)=rc
+
+    ! Set normalization for PAW%eig(io)>0
+      if (PAW%eig(io)>0) then
+         PAW%phi(:,io)=PAW%phi(:,io)/PAW%phi(thisrc,io)
+      endif
+     ! Find logderiv
+       logderiv=Gfirstderiv(Grid,thisrc,PAW%phi(:,io))/PAW%phi(thisrc,io)
+       write(6,*) 'logderiv ', io, l, logderiv
+
+     !  Find   bessel function zeros
+        call solvbes(kv,1.d0,0.d0,l,np)
+        write(6,*) 'Searching for solution ',kv(np)
+        if (np==1) then
+         root1=0.001d0; root2=kv(1)-0.001d0; xx=0.5d0*(root1+root2)
+        else
+         root1=kv(np-1)+0.001d0; root2=kv(np)-0.001d0; xx=0.5d0*(root1+root2)
+        endif
+        icount=0
+        Do
+          call jbessel(g,gp,gpp,l,2,xx)
+          yy=(logderiv-(1.d0/xx+gp/g))/(-1.d0/xx**2+gpp/g-(gp/g)**2)
+          if (abs(yy)<1.d-6) then
+            write(6,*) 'exiting Bessel loop', icount,xx,yy
+            exit
+          else
+            if (xx+yy>root2) then
+                 xx=0.5*(xx+root2)
+            else if (xx+yy<root1) then
+                 xx=0.5*(xx+root1)
+            else
+                xx=xx+yy
+            endif
+          endif
+          !write(6,*) 'iter Bessel', xx,yy
+          icount=icount+1
+          if (icount>1000) then
+            write(6,*) 'Giving up on Bessel root'
+            return
+          endif
+        Enddo
+
+        success=.true.
+        write(6,*) 'Found Bessel root at xx' , xx
+        dk=(pi/40)/rc             !  could be made adjustable
+        write(6,*) 'dk value for this case ', dk
+        kv=0
+        kv(1)=xx/rc-dk*(match-1)/2
+        write(6,*) '#  kv      1', kv(1)
+        Do i=2,match
+          kv(i)=kv(i-1)+dk
+          write(6,*) '#  kv   ',   i, kv(i)
+        enddo
+
+        Do i=1,match
+          f(:)=kv(i)*r(:)
+          call sphbes(l,n,f)
+          jl(:,i)=f(:)*r(:)
+        Enddo
+
+      ! Match bessel functions with wavefunctions
+
+        Ci=0; aa=0
+        Do j=1,match
+           i=match/2-j+1
+           Ci(j)=PAW%phi(thisrc-i*1,io)                ! 1 step should vary
+           aa(j,1:match)=jl(thisrc-i*1,1:match)
+        enddo
+
+        call SolveAXeqBM(match,aa,Ci,match-1)
+        write(6,*) 'Completed SolveAXeqB with coefficients'
+        write(6,'(1p,10e15.7)') (Ci(i),i=1,match)
+
+     ! Compute pseudized partial wave and unnormalized projector
+       PAW%tphi(:,io)=PAW%phi(:,io);
+       PAW%tp(:,io)=0.d0
+        do i=1,thisrc-1
+         PAW%tphi(i,io)=sum(Ci(1:match)*jl(i,1:match))
+         do j=1,match
+            PAW%tp(i,io)=PAW%tp(i,io)+&
+&             Ci(j)*(-PAW%eig(io)+(kv(j)**2)+VNC(i))*jl(i,j)
+         enddo
+        enddo
+
+       if (thisrc<=irc_vloc) then
+         do i=thisrc,irc_vloc-1
+             gpp=Gsecondderiv(Grid,i,PAW%tphi(:,io))
+             PAW%tp(i,io)=(-PAW%eig(io)&
+&              +VNC(i)+dble(l*(l+1))/(r(i)**2))*PAW%tphi(i,io)  -gpp
+         enddo
+       endif
+
+
+    enddo  !nbase
+
+     Deallocate(aa)
+!
+ Selectcase(Orthoindex)
+   Case default     ! Orthoindex=VANDERBILTORTHO
+  !! Form orthogonalized projectors --   VANDERBILTORTHO
+     write(6,*) ' Vanderbilt ortho'
+     do l=0,lmax
+       icount=0
+       do io=1,nbase
+        if (PAW%l(io)==l) icount=icount+1
+       enddo
+       if (icount==0) cycle
+       write(6,*) 'For l = ', l,icount,' basis functions'
+       allocate(aa(icount,icount),ai(icount,icount),omap(icount))
+       aa=0;icount=0
+       do io=1,nbase
+        if (PAW%l(io)==l) then
+          icount=icount+1
+          omap(icount)=io
+        endif
+       enddo
+       do i=1,icount
+         io=omap(i)
+         PAW%otphi(:,io)=PAW%tphi(:,io)
+         PAW%ophi(:,io)=PAW%phi(:,io)
+       enddo
+       do i=1,icount
+          io=omap(i)
+         do j=1,icount
+           jo=omap(j)
+           aa(i,j)=overlap(Grid,PAW%otphi(:,io),PAW%tp(:,jo),1,irc)
+         enddo
+       enddo
+       ai=aa;call minverse(ai,icount,icount,icount)
+
+       do i=1,icount
+         io=omap(i)
+         PAW%ck(io)=ai(i,i)
+         PAW%otp(:,io)=0
+         do j=1,icount
+           jo=omap(j)
+           PAW%otp(:,io)=PAW%otp(:,io)+PAW%tp(:,jo)*ai(j,i)
+         enddo
+       enddo
+
+       write(6,*) 'Check  otp for l = ', l
+       do i = 1, icount
+          io=omap(i)
+          do j = 1, icount
+             jo=omap(j)
+             write(6,*) 'Overlap i j ', i,j, &
+&                    overlap(Grid,PAW%otphi(:,io),PAW%otp(:,jo),1,irc)
+          enddo
+       enddo
+       deallocate(aa,ai,omap)
+    enddo
+
+  Case(GRAMSCHMIDTORTHO) ! Form orthonormal projectors --  GRAM-SCHMIDT SCHEME
+     write(6,*) 'Gramschmidt ortho'
+     DO l=0,lmax
+        icount=0
+        do io=1,nbase
+           if (PAW%l(io)==l) icount=icount+1
+        enddo
+        if (icount==0) cycle
+        allocate(aa(icount,icount),ai(icount,icount),omap(icount))
+        icount=0
+        DO io=1,nbase
+          IF (PAW%l(io)==l) THEN
+             IF (icount==0) istart=io
+             IF (icount>=0) ifinish=io
+               icount=icount+1;omap(icount)=io
+          ENDIF
+       ENDDO
+     DO ibase=istart,ifinish
+          PAW%otp(:,ibase)=PAW%tp(:,ibase)
+          PAW%otphi(:,ibase)=PAW%tphi(:,ibase)
+          PAW%ophi(:,ibase)=PAW%phi(:,ibase)
+          DO jbase=istart,ibase
+             IF (jbase.LT.ibase) THEN
+             xx=overlap(Grid,PAW%otp(:,jbase),PAW%otphi(:,ibase),1,irc)
+             yy=overlap(Grid,PAW%otphi(:,jbase),PAW%otp(:,ibase),1,irc)
+             PAW%ophi(1:n,ibase)=PAW%ophi(1:n,ibase)-PAW%ophi(1:n,jbase)*xx
+             PAW%Kop(1:n,ibase)=PAW%Kop(1:n,ibase)-PAW%Kop(1:n,jbase)*xx
+             PAW%otphi(1:n,ibase)=PAW%otphi(1:n,ibase)-PAW%otphi(1:n,jbase)*xx
+             PAW%otp(1:n,ibase)=PAW%otp(1:n,ibase)-PAW%otp(1:n,jbase)*yy
+             aa(ibase-istart+1,jbase-istart+1)=xx
+             aa(jbase-istart+1,ibase-istart+1)=xx
+             ELSE IF (jbase.EQ.ibase) THEN
+                   xx=overlap(Grid,PAW%otp(:,jbase),PAW%otphi(:,ibase),1,irc)
+                   !choice=1.d0/SQRT(ABS(xx))
+                   !PAW%otp(1:n,ibase)=PAW%otp(1:n,ibase)*DSIGN(choice,xx)
+                   !PAW%otphi(1:n,ibase)=PAW%otphi(1:n,ibase)*choice
+                   !PAW%ophi(1:n,ibase)=PAW%ophi(1:n,ibase)*choice
+                   !PAW%Kop(1:n,ibase)=PAW%Kop(1:n,ibase)*choice
+                   PAW%otp(1:n,ibase)=PAW%otp(1:n,ibase)/xx
+                   aa(ibase-istart+1,ibase-istart+1)=xx
+             ENDIF
+          ENDDO
+       ENDDO
+       ai=aa;
+       do i=1,icount
+        io=omap(i);PAW%ck(io)=ai(i,i)
+       enddo
+       deallocate(aa,ai,omap)
+     ENDDO
+
+  Case (SVDORTHO)    ! SVD construction
+     write(6,*) 'SVD ortho'
+     DO l=0,lmax
+        icount=0
+        do io=1,nbase
+           if (PAW%l(io)==l) icount=icount+1
+        enddo
+        if (icount==0) cycle
+        allocate(aa(icount,icount),ai(icount,icount),omap(icount),X(n,icount))
+        icount=0
+        DO io=1,nbase
+          IF (PAW%l(io)==l) THEN
+             IF (icount==0) istart=io
+             IF (icount>=0) ifinish=io
+               icount=icount+1;omap(icount)=io
+          ENDIF
+        ENDDO
+        do i=1,icount
+          io=omap(i)
+          PAW%otphi(:,io)=0
+          PAW%ophi(:,io)=0
+          PAW%otp(:,io)=0
+          do j=1,icount
+            jo=omap(j)
+            aa(i,j)=overlap(Grid,PAW%tphi(:,io),PAW%tp(:,jo),1,irc)
+          enddo
+        enddo
+        LWORK=MAX(200,icount,icount)
+        ALLOCATE(U(icount,icount),VT(icount,icount),WORK(LWORK),S(icount))
+        ai=aa;
+        CALL DGESVD('A','A',icount,icount,ai,icount,S,&
+&          U,icount,VT,icount,WORK,LWORK,k)
+
+        write(6,*) 'For l = ', l , 'Completed SVD'
+        write(6,*) 'S = ', S(:)
+
+        Do i=1,icount
+           io=omap(i)
+           X(:,i)=PAW%Kop(:,io);
+        Enddo
+        do j=1,icount
+           jo=omap(j)
+           PAW%ophi(:,jo)=0
+           PAW%otphi(:,jo)=0
+           PAW%otp(:,jo)=0
+           PAW%Kop(:,jo)=0
+           do i=1,icount
+              io=omap(i)
+              PAW%ophi(:,jo)=PAW%ophi(:,jo)+PAW%phi(:,io)*U(i,j)
+              PAW%otphi(:,jo)=PAW%otphi(:,jo)+PAW%tphi(:,io)*U(i,j)
+              PAW%Kop(:,jo)=PAW%Kop(:,jo)+X(:,i)*U(i,j)
+              PAW%otp(:,jo)=PAW%otp(:,jo)+PAW%tp(:,io)*VT(j,i)/S(j)
+           enddo
+        enddo
+
+         do i=1,icount
+            io=omap(i)
+            do j=1,icount
+               jo=omap(j)
+               write (6,*) 'Overlap ', i,j, &
+&                 overlap(Grid,PAW%otphi(:,io),PAW%otp(:,jo),1,irc)
+            enddo
+         enddo
+
+      deallocate(aa,ai,omap,U,VT,S,WORK,X)
+
+    ENDDO
+
+  End Select
+
+  Deallocate(VNC,kv,jl,f,Ci,rcindex,rcval)
+  END SUBROUTINE VASP_modrrkj
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!! makebasis_modrrkj
