@@ -1,4 +1,4 @@
-MODULE pseudo
+MODULE pseudo_atom
   USE GlobalMath
   USE atomdata
   USE aeatom
@@ -16,7 +16,7 @@ MODULE pseudo
   Type(Pseudoinfo), TARGET :: PAW
 
  !  Parameters controlling PAW options
-  INTEGER,PRIVATE,PARAMETER :: BLOECHL=1, VANDERBILT=2, CUSTOM=3, MODRRKJ=7
+  INTEGER,PRIVATE,PARAMETER :: BLOECHL=1, VANDERBILT=2, CUSTOM=3, MODRRKJ=7, VASPRRKJ=8
   INTEGER,PRIVATE,PARAMETER :: BLOECHLPS=0, POLYNOM=1, POLYNOM2=2, RRKJ=3
   INTEGER,PRIVATE,PARAMETER :: VANDERBILTORTHO=0, GRAMSCHMIDTORTHO=1
   INTEGER,PRIVATE,PARAMETER :: SVDORTHO=2
@@ -161,6 +161,9 @@ CONTAINS
        if (i>0) Orthoindex=GRAMSCHMIDTORTHO
      i=0;i=INDEX(inputfileline,'SVDORTHO')
        if (i>0) Orthoindex=SVDORTHO
+   else if (TRIM(Projectortype)=='VASPRRKJ') then
+     Projectorindex=VASPRRKJ;PSindex=RRKJ;Orthoindex=GRAMSCHMIDTORTHO
+     i=0;i=INDEX(inputfileline,'GRAMSCHMIDTORTHO')
    else if (TRIM(Projectortype)=='CUSTOM') then
     Projectorindex=CUSTOM
     i=0;i=INDEX(inputfileline,'BLOECHLPS')
@@ -356,6 +359,8 @@ CONTAINS
     CALL make_hf_tp_only(Grid,Pot,PAW,ifinput)
    ELSE IF (Projectorindex==MODRRKJ) THEN
     CALL makebasis_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
+   ELSE IF (Projectorindex==VASPRRKJ) THEN
+    CALL VASP_RRKJ(Grid,Pot,Orthoindex,ifinput,success)
    ENDIF
 
       WRITE(ifen,*) TRIM(PAW%Vloc_description)
@@ -896,6 +901,74 @@ CONTAINS
 
     END SUBROUTINE sethat
 
+    SUBROUTINE VASP_sethatg(Grid,PAW)
+      TYPE(GridInfo), INTENT(IN) :: Grid
+      TYPE(PseudoInfo), INTENT(INOUT) :: PAW
+!      INTEGER,INTENT(IN), OPTIONAL :: besselopt
+!      REAL(8),INTENT(IN), OPTIONAL :: gaussparam
+
+      INTEGER :: n,irc,irc_shap,i,lmax,ll
+      REAL(8), POINTER :: r(:)
+      REAL(8) :: h,con,rc,rc_shap,selfen,d,dd,jbes1,jbes2,qr
+      REAL(8) :: al(2),ql(2)
+
+      n=Grid%n
+      h=Grid%h
+      irc=PAW%irc
+      lmax=PAW%lmax
+      rc=PAW%rc
+      irc_shap=PAW%irc_shap
+      rc_shap=PAW%rc_shap
+      r=>Grid%r
+
+      PAW%hatden=0
+!      PAW%projshape=0
+      PAW%hatshape=0
+!      PAW%projshape(1)=1
+      PAW%hatshape(1)=1
+!      DO i=2,irc-1
+!       PAW%projshape(i)=(SIN(pi*r(i)/rc)/(pi*r(i)/rc))**2
+!      ENDDO
+!      if(present(gaussparam)) then
+!       d=rc_shap/SQRT(LOG(1.d0/gaussparam))
+!       PAW%gausslength=d
+!       DO i=2,irc
+!        PAW%hatshape(i)=EXP(-(r(i)/d)**2)
+!       ENDDO
+!       PAW%irc_shap=PAW%irc
+!       PAW%rc_shap=PAW%rc
+!      else if(present(besselopt)) then
+      DO ll=0, lmax
+       call shapebes(al,ql,ll,rc_shap)
+       DO i=1,irc_shap-1
+        qr=ql(1)*r(i);CALL jbessel(jbes1,d,dd,0,0,qr)
+        qr=ql(2)*r(i);CALL jbessel(jbes2,d,dd,0,0,qr)
+!        qr=ql(1)*r(i);CALL jbessel(jbes1,d,dd,ll,0,qr)
+!        qr=ql(2)*r(i);CALL jbessel(jbes2,d,dd,ll,0,qr)
+!        PAW%hatshape(i,ll)=al(1)*jbes1+al(2)*jbes2
+        PAW%hatshape(i)=al(1)*jbes1+al(2)*jbes2
+       ENDDO
+      ENDDO
+!      else
+!       DO i=2,irc_shap-1
+!        PAW%hatshape(i)=(SIN(pi*r(i)/rc_shap)/(pi*r(i)/rc_shap))**2
+!       ENDDO
+!      endif
+      PAW%hatden(1:irc)=PAW%hatshape(1:irc)*(r(1:irc)**2)
+
+      !  normalize
+      if (.not.besselshapefunction) then
+       con=integrator(Grid,PAW%hatden,1,PAW%irc_shap)
+       WRITE(6,*) ' check hatden normalization', con
+       PAW%hatden=PAW%hatden/con
+      endif
+
+      CALL poisson(Grid,con,PAW%hatden,PAW%hatpot,selfen)
+      WRITE(6,*) 'Self energy for L=0 hat density  ', selfen
+      WRITE(6,*) 'finished g_l of VASP '
+
+    END SUBROUTINE VASP_sethatg
+
     SUBROUTINE coretailselfenergy(Grid,PAW,ctctse,cthatse)
       TYPE(GridInfo), INTENT(IN) :: Grid
       TYPE(PseudoInfo), INTENT(INOUT) :: PAW
@@ -982,6 +1055,7 @@ CONTAINS
      PAW%coretailpoints=coretailpoints
 
       deallocate(d1,d2)
+      return
 
     END SUBROUTINE setcoretail
 
@@ -990,10 +1064,10 @@ CONTAINS
       TYPE(GridInfo), INTENT(IN) :: Grid
       REAL(8), INTENT(IN) :: coreden(:)
 
-      REAL(8) :: rc,h,logderiv(2),q(2),Ci(2),aa(2,2)
-      REAL(8) :: root1,root2, xx, g, gp, gpp, yy, x, z
-      REAL(8), allocatable :: d1(:),d2(:),coredenpr(:)
-      REAL(8), allocatable :: kv(:)
+      REAL(8) :: rc,h,ql(2),al(2), g, gp, gpp, gg
+      REAL(8) :: alpha,beta, xx(2), jbes, jbesp, jbespp, qr,det, z
+      REAL(8) :: amat(2,2),bb(2)
+      REAL(8), allocatable :: coredenpr(:)
       INTEGER :: i,j,k,n,irc,icount
       LOGICAL :: success
 
@@ -1002,6 +1076,7 @@ CONTAINS
       irc=PAW%irc_core
       rc=PAW%rc_core
 
+      WRITE(6,*) 'irc=',irc
       allocate(coredenpr(n), stat=i)
           if (i /= 0) then
              write(6,*) 'setcoretail: allocation error -- ', n,i
@@ -1012,93 +1087,55 @@ CONTAINS
         coredenpr(i)=coreden(i)/Grid%r(i)
       enddo
 
-      allocate(d1(n),d2(n),kv(n), stat=i)
-          if (i /= 0) then
-             write(6,*) 'setcoretail: allocation error -- ', n,i
-             stop
-          endif
-      CALL derivative(Grid,coredenpr,d1)
-      CALL derivative(Grid,d1,d2)
-      call solvbes(kv, 1.d0, 0.d0, 0, 2)
+!      CALL derivative(Grid,coredenpr,d1)
+       
+!      CALL derivative(Grid,d1,d2)
+!      call solvbes(kv, 1.d0, 0.d0, 0, 2)
 
-      DO i =1,2
-!        logderiv(i)=Gfirstderiv(Grid, irc-i+1, coredenpr)/coredenpr(irc-i+1)
-!      write(6,*) 'logderiv=', logderiv(i)
-         logderiv(i)=d1(irc-i+1)/coredenpr(irc-i+1)
-!      write(6,*) 'logderiv=', logderiv(i)
-
-
-        IF (i==1) THEN
-           root1 = 0.001d0; root2=kv(1)-0.001d0 
-           xx=0.5d0*(root1+root2)
-        ELSE
-           root1 =kv(1)+0.001d0; root2=kv(2)-0.001d0 
-           xx=0.5d0*(root1+root2)
-        ENDIF
-
-!        write(6,*) 'xx0=', xx
-
-        icount=0
-        DO
-          call jbessel(g,gp,gpp,0,2,xx)
-          yy=(logderiv(i)-(1.d0/xx+gp/g))/(-1.0/xx**2+gpp/g-(gp/g)**2)
-          IF( abs(yy) < 1.d-6) THEN
-!                  write(6,*) 'exiting Bessel loop', icount,xx,yy
-                  exit
-          ELSE
-                  IF (xx+yy>root2) THEN
-                          xx=0.5*(xx+root2)
-                  ELSE IF (xx+yy < root1) THEN
-                          xx=0.5*(xx+root1)
-                  ELSE
-                          xx=xx+yy
-                  ENDIF
-          ENDIF
-          icount=icount+1
-          IF (icount>1000) THEN
-                  write(6,*) 'Giving up on Bessel root'
-                  return
-          ENDIF
-        ENDDO
-
-        success= .TRUE.
-        q(i) = xx/Grid%r(irc-i+1)
-!        write(6,*) 'Found Bessel root at q_i', q(i)
-      ENDDO
-
-!      q(1)=q(1)/rc
-!      q(2)=q(2)/Grid%r(irc+1)
-
-      Ci(1:2)=0.d0; aa(1:2,1:2)=0.d0
+      alpha=1-rc*Gfirstderiv(Grid,irc,coredenpr)/coredenpr(irc)
+      beta=1.0d0
+      call solvbes(xx,alpha,beta,0,2)
+      ql(1:2)=xx(1:2)/rc
 
       DO i=1,2
-!        Ci(i)=coredenpr(irc-i+1)
-!        aa(i,1:2)=sin(q(1:2)*Grid%r(irc-i+1))!/Grid%r(irc-i+1)
-        Ci(i)=coredenpr(irc-i+1)/Grid%r(irc-i+1)
-        aa(i,1:2)=sin(q(1:2)*Grid%r(irc-i+1))/Grid%r(irc-i+1)
-      ENDDO
-!      WRITE(6,*) 'Ci=', (Ci(i),i=1,2)
-!      WRITE(6,*) 'ai=', (aa(i,1),i=1,2)
-!      write(6,*) (aa(2,2)*Ci(1)-aa(1,2)*Ci(2))/(aa(1,1)*aa(2,2)-aa(1,2)*aa(2,1))
-!      write(6,*) (aa(2,1)*Ci(1)-aa(1,1)*Ci(2))/(aa(1,2)*aa(2,1)-aa(1,1)*aa(2,2))
-!      call SolveAXeqBM(2, aa, Ci,1)
-      call SolveAXeqB(2, aa, Ci)
-!      write(6,*) 'Completed SolveAXeqB with coefficients'
-!      write(6,*) (Ci(i),i=1,2)
-!      WRITE(6,*) 'Ci=',Ci(1)*sin(q(1)*Grid%r(irc))+Ci(2)*sin(q(2)*Grid%r(irc))
-!      WRITE(6,*) 'Ci=',Ci(1)*sin(q(1)*Grid%r(irc-1))+Ci(2)*sin(q(2)*Grid%r(irc-1))
-       
-      x=coreden(irc)
+        qr=ql(i)*rc
+        call jbessel(jbes,jbesp,jbespp, 0, 2, qr)
+        jbespp=2.d0*ql(i)*jbesp+jbespp*ql(i)*ql(i)*rc
+        jbesp=jbes+jbesp*ql(i)*rc
+        jbes=jbes*rc
+        amat(1,i)=jbes
+        amat(2,i)=jbespp
+     ENDDO
+
+     bb(1)=coredenpr(irc)
+     bb(2)=Gsecondderiv(Grid, irc,coredenpr)
+
+   det=amat(1,1)*amat(2,2)-amat(1,2)*amat(2,1)
+   al(1)=(amat(2,2)*bb(1)-amat(1,2)*bb(2))/det
+   al(2)=(amat(1,1)*bb(2)-amat(2,1)*bb(1))/det
+
+!      x=coreden(irc)
 
 !      write(6,*) 'setcoretail: u0,u2,u4 = ', u0,u2,u4
 
       PAW%core=coreden
       PAW%tcore=coreden
 
-      DO i=1,irc
-         PAW%tcore(i)=sum(Ci(1:2)*(sin(q(1:2)*Grid%r(i))/Grid%r(i)))*Grid%r(i)**2
+        do i=2,irc-1
+         qr=ql(1)*Grid%r(i)
+         call jbessel(g,gp,gpp,0,2,qr)
+         PAW%tcore(i)=al(1)*g*Grid%r(i)*Grid%r(i)
+ !        gg=al(1)*(2.d0*ql(1)*gp+ql(1)*qr*gpp)
+         qr=ql(2)*Grid%r(i)
+         call jbessel(g,gp,gpp,0,2,qr)
+         PAW%tcore(i)=PAW%tcore(i)+al(2)*g*Grid%r(i)*Grid%r(i)
+!         gg=gg+al(2)*(2.d0*ql(2)*gp+ql(2)*qr*gpp)
+!         PAW%tp(i,io)=(PAW%eig(io)-VNC(i)-dble(l*(l+1))/(r(i)**2))*PAW%tphi(i,io)+gg
+        enddo
+!      DO i=2,irc
+!         PAW%tcore(i)=sum(al(1:2)*sin(ql(1:2)*Grid%r(i)))*Grid%r(i)
 !         PAW%tcore(i)=sum(Ci(1:2)*(sin(q(1:2)*Grid%r(i))/Grid%r(i)))*Grid%r(i)
-      ENDDO
+!      ENDDO
 
   ! Find coretailpoints
      z = integrator(Grid,coreden)
@@ -1113,7 +1150,8 @@ CONTAINS
      write(6,*) 'coretailpoints = ',coretailpoints
      PAW%coretailpoints=coretailpoints
 
-      deallocate(d1,d2,coredenpr, kv)
+      deallocate(coredenpr)
+      return
     END SUBROUTINE setcoretail2
 
 
@@ -1348,7 +1386,7 @@ CONTAINS
           PAW%np(nbase)=999
           PAW%nodes(nbase)=currentnode+1
           currentnode=PAW%nodes(nbase)
-          write (6,'(a)') ' nbase,  node,    l'!,nbase,l,currentnode
+          write (6,'(a)') ' nbase,  l, node   ',nbase,l,currentnode
           PAW%eig(nbase)=energy
           PAW%occ(nbase)=0.d0
           PAW%phi(1:n,nbase)=0.d0
@@ -1365,8 +1403,8 @@ CONTAINS
           rat=DSIGN(rat,PAW%phi(irc,nbase))
           PAW%phi(1:n,nbase)=PAW%phi(1:n,nbase)/rat
           !IF(Orbit%exctype=='HF') PAW%lmbd(:,nbase)=PAW%lmbd(:,nbase)/rat
-!          WRITE(6,'(3i6,1p,2e15.6)') nbase,PAW%np(nbase),l,             &
-!&              PAW%eig(nbase),PAW%occ(nbase)
+          WRITE(6,'(3i6,1p,2e15.6)') nbase,PAW%np(nbase),l,             &
+&              PAW%eig(nbase),PAW%occ(nbase)
           WRITE(6,'(3i6,1p,2e15.6)') nbase,PAW%nodes(nbase),l,             &
 &              PAW%eig(nbase),PAW%occ(nbase)
           nbl=nbl+1
@@ -1648,6 +1686,213 @@ CONTAINS
   END SUBROUTINE makebasis_custom
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!! VASP_RRKJ
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  SUBROUTINE VASP_RRKJ(Grid,Pot,Orthoindex,ifinput,success)
+    TYPE(GridInfo), INTENT(IN) :: Grid
+    TYPE(PotentialInfo), INTENT(IN) :: Pot
+    INTEGER, INTENT(IN) :: Orthoindex,ifinput
+
+    INTEGER :: i,j,k,l,io,jo,ok,lmax,nbase,n,irc,irc_vloc,nr,np,thisrc
+    INTEGER :: icount,jcount,istart,ifinish,ibase,jbase,lprev
+    INTEGER :: match=5
+    REAL(8) :: dk
+!    REAL:: XNULL(2)
+    REAL(8) :: choice,rc,xx,yy,gg,g,gp,gpp,al(2),ql(2),root1,root2,logderiv,qi(2)
+    INTEGER, ALLOCATABLE :: omap(:),rcindex(:)
+    REAL(8), ALLOCATABLE :: VNC(:),Ci(:),aa(:,:),ai(:,:),jl(:,:),kv(:)
+    REAL(8), ALLOCATABLE :: f(:),rcval(:)
+    REAL(8), ALLOCATABLE :: U(:,:),VT(:,:),WORK(:),S(:),X(:,:)
+    INTEGER :: LWORK
+    REAL(8), POINTER  :: r(:)
+    CHARACTER(132) :: inputline
+    LOGICAL :: success
+
+    success=.false.
+    n=Grid%n
+    r=>Grid%r
+    irc=PAW%irc
+    irc_vloc=PAW%irc_vloc
+    nbase=PAW%nbase
+    lmax=PAW%lmax
+
+    ALLOCATE(rcindex(nbase),rcval(nbase))
+
+  !  Input matching radii for each basis function
+      call readmatchradius(Grid,ifinput,rcindex,rcval)
+
+
+  ! Set screened local pseudopotential
+    allocate(VNC(n),stat=i)
+    if (i/=0) stop 'allocation error in make_modrrkj'
+    VNC(2:n)=PAW%rveff(2:n)/r(2:n)
+    call extrapolate(Grid,VNC)
+
+
+    allocate(kv(match),jl(n,2),f(n),Ci(2),aa(2,2))
+    if (i/=0) stop 'allocation error in make_nrecipe'
+  ! Loop on basis elements
+    lprev=-1;np=0
+    do io=1,nbase
+
+
+       PAW%Kop(1,io)=0
+       PAW%Kop(2:n,io)=(PAW%eig(io)-Pot%rv(2:n)/Grid%r(2:n))*PAW%phi(2:n,io)
+
+       l=PAW%l(io)
+       if (l==lprev) then
+         np=np+1
+       else
+         np=1
+         lprev=l
+       endif
+
+       thisrc=rcindex(io)
+       rc=rcval(io);PAW%rcio(io)=rc
+
+        call psbes(PAW%phi(:,io),al,ql,Grid,l,thisrc,n)
+        WRITE(6,*) 'Bessel: al=', al(1:2)
+        WRITE(6,*) 'Bessel: ql=', ql(1:2)
+
+        PAW%tphi(1,io)=0.d0
+        PAW%tp(:,io)=0.d0
+        PAW%tphi(:,io)=PAW%phi(:,io);
+        do i=2,thisrc-1
+         xx=ql(1)*r(i)
+         call jbessel(g,gp,gpp,l,2,xx)
+         PAW%tphi(i,io)=al(1)*g*r(i)
+         gg=al(1)*(2.d0*ql(1)*gp+ql(1)*xx*gpp)
+         xx=ql(2)*r(i)
+         call jbessel(g,gp,gpp,l,2,xx)
+         PAW%tphi(i,io)=PAW%tphi(i,io)+al(2)*g*r(i)
+         gg=gg+al(2)*(2.d0*ql(2)*gp+ql(2)*xx*gpp)
+         PAW%tp(i,io)=(PAW%eig(io)-VNC(i)-dble(l*(l+1))/(r(i)**2))*PAW%tphi(i,io)+gg
+        enddo
+    ! Set normalization for PAW%eig(io)>0
+     ! Find logderiv
+
+     !  Find   bessel function zeros
+
+      ! Match bessel functions with wavefunctions
+
+     ! Compute pseudized partial wave and unnormalized projector
+
+     enddo
+     deallocate(aa)
+!     return
+!
+ Selectcase(Orthoindex)
+  Case default !(GRAMSCHMIDTORTHO)  Form orthonormal projectors --  GRAM-SCHMIDT SCHEME
+     write(6,*) 'Gramschmidt ortho'
+     DO l=0,lmax
+        icount=0
+        do io=1,nbase
+           if (PAW%l(io)==l) icount=icount+1
+        enddo
+        if (icount==0) cycle
+        allocate(aa(icount,icount),ai(icount,icount),omap(icount))
+        icount=0
+        DO io=1,nbase
+          IF (PAW%l(io)==l) THEN
+             IF (icount==0) istart=io
+             IF (icount>=0) ifinish=io
+               icount=icount+1;omap(icount)=io
+          ENDIF
+        ENDDO
+     DO ibase=istart,ifinish
+          PAW%otp(:,ibase)=PAW%tp(:,ibase)
+          PAW%otphi(:,ibase)=PAW%tphi(:,ibase)
+          PAW%ophi(:,ibase)=PAW%phi(:,ibase)
+          DO jbase=istart,ibase
+             IF (jbase.LT.ibase) THEN
+             xx=overlap(Grid,PAW%otp(:,jbase),PAW%otphi(:,ibase),1,irc)
+             yy=overlap(Grid,PAW%otphi(:,jbase),PAW%otp(:,ibase),1,irc)
+             PAW%ophi(1:n,ibase)=PAW%ophi(1:n,ibase)-PAW%ophi(1:n,jbase)*xx
+             PAW%Kop(1:n,ibase)=PAW%Kop(1:n,ibase)-PAW%Kop(1:n,jbase)*xx
+             PAW%otphi(1:n,ibase)=PAW%otphi(1:n,ibase)-PAW%otphi(1:n,jbase)*xx
+             PAW%otp(1:n,ibase)=PAW%otp(1:n,ibase)-PAW%otp(1:n,jbase)*yy
+             aa(ibase-istart+1,jbase-istart+1)=xx
+             aa(jbase-istart+1,ibase-istart+1)=xx
+             ELSE IF (jbase.EQ.ibase) THEN
+                   xx=overlap(Grid,PAW%otp(:,jbase),PAW%otphi(:,ibase),1,irc)
+                   !choice=1.d0/SQRT(ABS(xx))
+                   !PAW%otp(1:n,ibase)=PAW%otp(1:n,ibase)*DSIGN(choice,xx)
+                   !PAW%otphi(1:n,ibase)=PAW%otphi(1:n,ibase)*choice
+                   !PAW%ophi(1:n,ibase)=PAW%ophi(1:n,ibase)*choice
+                   !PAW%Kop(1:n,ibase)=PAW%Kop(1:n,ibase)*choice
+                   PAW%otp(1:n,ibase)=PAW%otp(1:n,ibase)/xx
+                   aa(ibase-istart+1,ibase-istart+1)=xx
+             ENDIF
+          ENDDO
+       ENDDO
+       ai=aa;
+       do i=1,icount
+        io=omap(i);PAW%ck(io)=ai(i,i)
+       enddo
+       deallocate(aa,ai,omap)
+     ENDDO
+
+   Case (VANDERBILTORTHO)     ! Orthoindex=VANDERBILTORTHO
+  !! Form orthogonalized projectors --   VANDERBILTORTHO
+     write(6,*) ' Vanderbilt ortho'
+     do l=0,lmax
+       icount=0
+       do io=1,nbase
+        if (PAW%l(io)==l) icount=icount+1
+       enddo
+       if (icount==0) cycle
+       write(6,*) 'For l = ', l,icount,' basis functions'
+       allocate(aa(icount,icount),ai(icount,icount),omap(icount))
+       aa=0;icount=0
+       do io=1,nbase
+        if (PAW%l(io)==l) then
+          icount=icount+1
+          omap(icount)=io
+        endif
+       enddo
+       do i=1,icount
+         io=omap(i)
+         PAW%otphi(:,io)=PAW%tphi(:,io)
+         PAW%ophi(:,io)=PAW%phi(:,io)
+       enddo
+       do i=1,icount
+          io=omap(i)
+         do j=1,icount
+           jo=omap(j)
+           aa(i,j)=overlap(Grid,PAW%otphi(:,io),PAW%tp(:,jo),1,irc)
+         enddo
+       enddo
+       ai=aa;call minverse(ai,icount,icount,icount)
+
+       do i=1,icount
+         io=omap(i)
+         PAW%ck(io)=ai(i,i)
+         PAW%otp(:,io)=0
+         do j=1,icount
+           jo=omap(j)
+           PAW%otp(:,io)=PAW%otp(:,io)+PAW%tp(:,jo)*ai(j,i)
+         enddo
+       enddo
+
+       write(6,*) 'Check  otp for l = ', l
+       do i = 1, icount
+          io=omap(i)
+          do j = 1, icount
+             jo=omap(j)
+             write(6,*) 'Overlap i j ', i,j, &
+&                    overlap(Grid,PAW%otphi(:,io),PAW%otp(:,jo),1,irc)
+          enddo
+       enddo
+       deallocate(aa,ai,omap)
+    enddo
+
+  End Select
+  
+  Deallocate(VNC,kv,jl,f,Ci,rcindex,rcval)
+  return
+  END SUBROUTINE VASP_RRKJ
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!! makebasis_modrrkj
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   SUBROUTINE makebasis_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
@@ -1721,7 +1966,7 @@ CONTAINS
 
      !  Find   bessel function zeros
         call solvbes(kv,1.d0,0.d0,l,np)
-        write(6,*) 'Searching for solution ',kv(np)
+!        write(6,*) 'Searching for solution ',kv(np)
         if (np==1) then
          root1=0.001d0; root2=kv(1)-0.001d0; xx=0.5d0*(root1+root2)
         else
@@ -1779,8 +2024,8 @@ CONTAINS
         enddo
 
         call SolveAXeqBM(match,aa,Ci,match-1)
-        write(6,*) 'Completed SolveAXeqB with coefficients'
-        write(6,'(1p,10e15.7)') (Ci(i),i=1,match)
+!        write(6,*) 'Completed SolveAXeqB with coefficients'
+!        write(6,'(1p,10e15.7)') (Ci(i),i=1,match)
 
      ! Compute pseudized partial wave and unnormalized projector
        PAW%tphi(:,io)=PAW%phi(:,io);
@@ -2211,6 +2456,7 @@ CONTAINS
     SUBROUTINE formprojectors(Grid,Pot,PS,ifinput,option)
       TYPE(GridInfo),  INTENT(IN) :: Grid
       TYPE(PotentialInfo), INTENT(IN) :: Pot,PS
+!      WRITE(6,*) 'Self energy for L=0 hat density  ', selfen
       INTEGER,INTENT(IN) :: ifinput,option
 
       INTEGER :: nbase,lmax,l,io,irc,wantednodes,nb,n,icount
@@ -3959,4 +4205,114 @@ CONTAINS
     deallocate(mapp)
 
   END SUBROUTINE Report_PseudobasisRP
-END MODULE pseudo
+  
+
+!*******************************************************************
+!  SUBROUTINE BEZERO
+!  searches for NQ zeros j(qr)
+!  i/o:
+!         XNULL(NQ) result
+!         L           quantum number l
+!  great-full spaghetti code (written by gK)
+!********************************************************************
+
+    SUBROUTINE AUG_BEZERO(XNULL,L,NQ)
+      INTEGER,PARAMETER :: q =SELECTED_REAL_KIND(10)
+!      IMPLICIT REAL(q) (A-H,O-Z)
+      REAL,PARAMETER :: STEP=.1_q, BREAK= 1E-10_q
+      INTEGER :: N,L, NQ
+      REAL :: X, BJ1, BJ2, DUMMY, ETA, SSTEP, XX, XNULL(NQ)
+!      DIMENSION XNULL(NQ)
+! initialization
+      X=STEP
+      N=0
+! entry point for next q_n
+  30  CALL SBESSE2(X, BJ1, DUMMY,  L)
+! coarse search
+  10  X=X+STEP
+      CALL SBESSE2(X, BJ2, DUMMY,  L)
+! found one point
+      IF(BJ1*BJ2 < 0) THEN
+        ETA=0.0_q
+! interval bisectioning
+        SSTEP=STEP
+        XX   =X
+  20    SSTEP=SSTEP/2
+        IF (BJ1*BJ2 < 0) THEN
+          XX=XX-SSTEP
+        ELSE
+          XX=XX+SSTEP
+        ENDIF
+        CALL SBESSE2(XX, BJ2, DUMMY,  L)
+        IF (SSTEP > BREAK) GOTO 20
+
+        N=N+1
+        XNULL(N)=XX
+        IF (N == NQ) RETURN
+        GOTO 30
+      ENDIF
+      GOTO 10
+
+    END SUBROUTINE
+
+      SUBROUTINE SBESSE2( X, BJ, BJP , LMAX)
+!      USE prec
+      INTEGER,PARAMETER :: q =SELECTED_REAL_KIND(10)
+!      IMPLICIT REAL(q) (A-H,O-Z)
+      REAL,PARAMETER :: DEL=1._q
+!      REAL(q) X,BJ,BJP
+      INTEGER :: N,LMAX, L
+      REAL :: X, BJ, BJP, TEMP, ETA
+
+      IF ( X< DEL) THEN
+         BJ  = SBESSITER(X,LMAX)
+         BJP = SBESSITER(X,LMAX+1)
+         BJP = -BJP+ BJ*LMAX/X
+      ELSE
+         BJ = SIN(X)/X
+         BJP=(-COS(X)+BJ)/X
+
+         DO L=2,LMAX+1
+            TEMP= -BJ + (2*L-1)*BJP/ X
+            BJ  = BJP
+            BJP = TEMP
+         ENDDO
+         BJP = -BJP+ BJ*LMAX/X
+
+      ENDIF
+      RETURN
+    END SUBROUTINE
+
+
+      FUNCTION SBESSITER(X,LMAX)
+!      USE prec
+
+      INTEGER,PARAMETER :: q =SELECTED_REAL_KIND(10)
+!      IMPLICIT REAL(q) (A-H,O-Z)
+      REAL,PARAMETER :: ABBRUCH = 1E-16_q
+      INTEGER,PARAMETER :: ITERMAX = 40
+      INTEGER :: N,LMAX, L,I
+      REAL :: X, X2, FAK, SUM, D, SBESSITER
+
+      X2= X*X/2
+      FAK = 1._q
+      DO L=1,LMAX
+         FAK = FAK*X /(2*L+1)
+      ENDDO
+
+      SUM = 1._q
+      D   = 1._q
+      DO I=1,ITERMAX
+         D = -D* X2/(I*(2*(LMAX+I)+1))
+         IF ( ABS(D)< ABBRUCH) GOTO 230
+         SUM = SUM + D
+      ENDDO
+
+      WRITE(*,*) 'ERROR: SBESSELITER : nicht konvergent'
+      STOP
+
+ 230  SBESSITER= FAK * SUM
+      RETURN
+      END FUNCTION SBESSITER
+
+END MODULE pseudo_atom

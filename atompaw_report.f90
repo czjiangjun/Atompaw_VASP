@@ -3,7 +3,7 @@ MODULE  atompaw_report
   USE fock
   USE globalmath
   USE gridmod
-  USE pseudo
+  USE pseudo_atom
   USE pseudodata
   USE libxc_mod
 

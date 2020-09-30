@@ -1318,7 +1318,7 @@ End Subroutine
     tol=tol*S(1)
     X=0
     DO i=1,n
-       write(6,*) 'Solver, tol ',i,S(i),tol
+!       write(6,*) 'Solver, tol ',i,S(i),tol
        IF (S(i)>tol) THEN
           xx=DOT_PRODUCT(U(1:n,i),B(1:n))/S(i)
           X(1:n)=X(1:n)+xx*(VT(i,1:n))

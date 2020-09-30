@@ -17,7 +17,7 @@ Module ABINITInterface
  use GlobalMath
  use gridmod
  use excor
- use pseudo
+ use pseudo_atom
  use interpolation_mod
  use pkginfo
  use libxc_mod

@@ -16,7 +16,8 @@ Module XMLInterface
  use GlobalMath
  use gridmod
  use excor
- use pseudo
+ use pseudo_atom
+ use pseudodata
  use pkginfo
 
  implicit none
