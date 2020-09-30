@@ -125,7 +125,8 @@ am__objects_1 = abinitinterface.lo aeatom.lo anderson_driver.lo \
 	hf_pseudo.lo interpolation_mod.lo ldagga_mod.lo libxc_mod.lo \
 	numerov_mod.lo paw_sub.lo pseudo_sub.lo pseudo.lo \
 	pseudodata.lo pwscfinterface.lo radialsr.lo report_mod.lo \
-	search_sort.lo xmlinterface.lo
+	search_sort.lo xmlinterface.lo \
+	ini.lo optreal.lo radial.lo setlocalpp.lo pseudo_vasp.lo vasp_pseudo.lo 
 am_libatompaw_la_OBJECTS = $(am__objects_1) atompaw_lib.lo
 am__objects_2 = pkginfo.lo
 nodist_libatompaw_la_OBJECTS = $(am__objects_2)
@@ -332,6 +333,12 @@ atp_srcs = \
   paw_sub.f90 \
   pseudo_sub.f90 \
   pseudo.f90 \
+  ini.f90 \
+  optreal.f90 \
+  radial.f90 \
+  setlocalpp.f90 \
+  pseudo_vasp.f90 \
+  vasp_pseudo.f90 \
   pseudodata.f90 \
   pwscfinterface.f90 \
   radialsr.f90 \
@@ -754,13 +761,15 @@ atomdata.$(LTOBJEXT):
 atompaw_lib.$(LTOBJEXT):
 
 atompaw_prog.$(LTOBJEXT): globalmath.$(LTOBJEXT) aeatom.$(LTOBJEXT) \
-	atomdata.$(LTOBJEXT) atompaw_report.$(LTOBJEXT) pseudo.$(LTOBJEXT) \
+	atomdata.$(LTOBJEXT) atompaw_report.$(LTOBJEXT)  pseudo.$(LTOBJEXT) \
+        ini.$(LTOBJEXT) optreal.(LTOBJEXT) radial.$(LTOBJEXT) setlocalpp.$(LTOBJEXT) \
+	pseudo_vasp.$(LTOBJEXT) vasp_pseudo.$(LTOBJEXT) \
 	abinitinterface.$(LTOBJEXT) pwscfinterface.$(LTOBJEXT) xmlinterface.$(LTOBJEXT) \
 	pkginfo.$(LTOBJEXT) libxc_mod.$(LTOBJEXT)
 
 atompaw_report.$(LTOBJEXT): atomdata.$(LTOBJEXT) fock.$(LTOBJEXT) \
 	globalmath.$(LTOBJEXT) gridmod.$(LTOBJEXT) pseudo.$(LTOBJEXT) \
-	pseudodata.$(LTOBJEXT) libxc_mod.$(LTOBJEXT)
+	pseudodata.$(LTOBJEXT) libxc_mod.$(LTOBJEXT) #vasp_pseudo.$(LTOBJEXT)
 
 blockdavidson_mod.$(LTOBJEXT): globalmath.$(LTOBJEXT) search_sort.$(LTOBJEXT)
 
@@ -836,6 +845,25 @@ search_sort.$(LTOBJEXT):
 
 xmlinterface.$(LTOBJEXT): atomdata.$(LTOBJEXT) globalmath.$(LTOBJEXT) \
 	gridmod.$(LTOBJEXT) excor.$(LTOBJEXT) pseudo.$(LTOBJEXT) pkginfo.$(LTOBJEXT)
+
+ini.$(LTOBJEXT):
+
+optreal.$(LTOBJEXT): ini.$(LTOBJEXT)
+
+radial.$(LTOBJEXT): ini.$(LTOBJEXT)
+
+setlocalpp.$(LTOBJEXT): ini.$(LTOBJEXT) radial.$(LTOBJEXT)
+
+pseudo_vasp.$(LTOBJEXT): ini.$(LTOBJEXT) radial.$(LTOBJEXT) setlocalpp.$(LTOBJEXT) \
+	optreal.$(LTOBJEXT)
+
+vasp_pseudo.$(LTOBJEXT): globalmath.$(LTOBJEXT) atomdata.$(LTOBJEXT) aeatom.$(LTOBJEXT) \
+	excor.$(LTOBJEXT) exx_pseudo.$(LTOBJEXT) hf_pseudo.$(LTOBJEXT) \
+	numerov_mod.$(LTOBJEXT) paw_sub.$(LTOBJEXT) pseudodata.$(LTOBJEXT) \
+	pseudo_sub.$(LTOBJEXT) radialsr.$(LTOBJEXT) pseudo.$(LTOBJEXT) \
+	ini.$(LTOBJEXT) radial.$(LTOBJEXT)  setlocalpp.$(LTOBJEXT) pseudo_vasp.$(LTOBJEXT) \
+	atompaw_report.$(LTOBJEXT)
+
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.
