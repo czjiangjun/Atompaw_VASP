@@ -7,9 +7,10 @@ PROGRAM atompaw
   !************************************************************
   USE GlobalMath
   USE aeatom
+  USE pseudodata
   USE atomdata
   USE atompaw_report
-  USE pseudo
+  USE pseudo_atom
   USE abinitinterface
   USE pwscfinterface
   USE xmlinterface
@@ -17,6 +18,7 @@ PROGRAM atompaw
   USE pkginfo
 
   IMPLICIT NONE
+!  Type(PseudoInfo) :: PAW
   INTEGER :: i,j,iargc
   CHARACTER(120) :: inputfile,outputfile,token
   LOGICAL :: lotsofoutput=.false.    ! can be changed eventually
@@ -88,24 +90,22 @@ PROGRAM atompaw
   CALL SetPAWOptions1(ifinput,ifen,Grid)
   CALL InitPAW(PAW,Grid,FCOrbit)
   CALL setbasis(Grid,FCPot,FCOrbit,ifinput)
-!  Call setcoretail(Grid,FC%coreden)
-  Call setcoretail2(Grid,FC%coreden)
+  Call setcoretail(Grid,FC%coreden)
+
   If (TRIM(FCorbit%exctype)=='HF'.or.TRIM(FCorbit%exctype)=='EXXKLI') PAW%tcore=0
   If (TRIM(FCorbit%exctype)=='EXXKLI') Call fixtcorewfn(Grid,PAW)
-!  Call SetPAWOptions2(ifinput,ifen,Grid,FCOrbit,FCPot,OK)
+
+  CALL vasp_pseudo(ifinput, ifen, Grid, FC%coreden, FCOrbit, FCPot, OK)
+
+ ! Call SetPAWOptions2(ifinput,ifen,Grid,FCOrbit,FCPot,OK)
+
 !  If (.not.OK) stop 'Stopping due to options failure'
 !  Call Report_Pseudobasis(Grid,PAW,ifen)
 
-!  Call Set_PAW_MatrixElements(Grid,PAW)
-!  CALL logderiv(Grid,FCPot,PAW)
-!  CALL ftprod(Grid)
 
-!  CALL FindVlocfromVeff(Grid,FCOrbit,PAW)
-!  CALL Report_Pseudopotential(Grid,PAW)
+  CALL Report_pseudo_energies(PAW,6)
+  CALL Report_pseudo_energies(PAW,ifen)
 
-!  CALL SPMatrixElements(Grid,FCPot,FC,PAW)
-!  CALL Report_pseudo_energies(PAW,6)
-!  CALL Report_pseudo_energies(PAW,ifen)
 
   CLOSE(ifinput)
   CLOSE(ifen)

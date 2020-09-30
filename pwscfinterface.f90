@@ -4,7 +4,8 @@ Module PWscfInterface
   USE excor
   USE gridmod
   USE interpolation_mod
-  USE pseudo
+  USE pseudo_atom
+  USE pseudodata
 
   Implicit none
 
