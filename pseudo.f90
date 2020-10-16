@@ -360,6 +360,7 @@ CONTAINS
    ELSE IF (Projectorindex==MODRRKJ) THEN
     CALL makebasis_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
    ELSE IF (Projectorindex==VASPRRKJ) THEN
+           WRITE(6,*) 'TEST_VASP'
     CALL VASP_RRKJ(Grid,Pot,Orthoindex,ifinput,success)
    ENDIF
 
@@ -1386,7 +1387,7 @@ CONTAINS
           PAW%np(nbase)=999
           PAW%nodes(nbase)=currentnode+1
           currentnode=PAW%nodes(nbase)
-          write (6,'(a)') ' nbase,  l, node   ',nbase,l,currentnode
+          write (6,*) ' nbase,  l, node   ',nbase,l,currentnode
           PAW%eig(nbase)=energy
           PAW%occ(nbase)=0.d0
           PAW%phi(1:n,nbase)=0.d0
@@ -1749,15 +1750,16 @@ CONTAINS
 
        thisrc=rcindex(io)
        rc=rcval(io);PAW%rcio(io)=rc
+!       WRITE(6,*) 'irc=', irc, 'thisirc=',thisrc
 
-        call psbes(PAW%phi(:,io),al,ql,Grid,l,thisrc,n)
-        WRITE(6,*) 'Bessel: al=', al(1:2)
-        WRITE(6,*) 'Bessel: ql=', ql(1:2)
+        call psbes(PAW%phi(:,io),al,ql,Grid,l,irc,n)
+!        WRITE(6,*) 'Bessel: al=', al(1:2)
+!        WRITE(6,*) 'Bessel: ql=', ql(1:2)
 
         PAW%tphi(1,io)=0.d0
         PAW%tp(:,io)=0.d0
         PAW%tphi(:,io)=PAW%phi(:,io);
-        do i=2,thisrc-1
+        do i=2,irc
          xx=ql(1)*r(i)
          call jbessel(g,gp,gpp,l,2,xx)
          PAW%tphi(i,io)=al(1)*g*r(i)

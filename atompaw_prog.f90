@@ -16,6 +16,7 @@ PROGRAM atompaw
   USE xmlinterface
   USE libxc_mod
   USE pkginfo
+  USE VASP_POTCAR
 
   IMPLICIT NONE
 !  Type(PseudoInfo) :: PAW
@@ -95,7 +96,7 @@ PROGRAM atompaw
   If (TRIM(FCorbit%exctype)=='HF'.or.TRIM(FCorbit%exctype)=='EXXKLI') PAW%tcore=0
   If (TRIM(FCorbit%exctype)=='EXXKLI') Call fixtcorewfn(Grid,PAW)
 
-  CALL vasp_pseudo(ifinput, ifen, Grid, FC%coreden, FCOrbit, FCPot, OK)
+  CALL vasp_pseudo(ifinput, ifen, Grid, FCOrbit, AEPot, FCPot, OK)
 
  ! Call SetPAWOptions2(ifinput,ifen,Grid,FCOrbit,FCPot,OK)
 
