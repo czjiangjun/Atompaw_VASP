@@ -108,7 +108,7 @@
           ENDDO
 
 !!        WRITE(6,*) 'N=', Grid0%n
-          call SetPOTAE(Grid0, FC%coreden, Pot)
+          call SetPOTAE(Grid0, FC%coreden, FC%valeden, Pot)
       OPEN(UNIT=20,FILE='ATOM_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=20,FILE='ATOM_POTAE',STATUS='OLD')
@@ -180,12 +180,13 @@
 ! 
         END SUBROUTINE vasp_pseudo
 
-        SUBROUTINE SetPOTAE(Grid2, coreden, POT)
+        SUBROUTINE SetPOTAE(Grid2, coreden, valeden, POT)
          USE atomdata
          USE aeatom
         TYPE(GridInfo), INTENT(IN) :: Grid2
         TYPE(PotentialInfo) :: POT
         REAL(8), INTENT(IN) :: coreden(:)
+        REAL(8), INTENT(IN) :: valeden(:)
         REAL(8), ALLOCATABLE :: density(:), Vrxc_tmp(:)
         REAL(8) qc, ecoul, v0, etxc, eex, SCALE
 
@@ -200,11 +201,11 @@
         density = 0.d0
         DO i = 1, Grid2%n
 !           density(i) = coreden(i)+FCOrbit%den(i)
-           density(i) = coreden(i)+AEOrbit%den(i)
+           density(i) = coreden(i)+valeden(i)
         ENDDO
 
 !        call poisson(Grid2, qc, coreden, POT%rvh, ecoul, v0)
-        call poisson(Grid2, qc, FCOrbit%den, POT%rvh, ecoul, v0)
+        call poisson(Grid2, qc, valeden, POT%rvh, ecoul, v0)
 !        call poisson(Grid2, qc, density, POT%rvh, ecoul, v0)
 !        WRITE(6,*) qc, v0
 
@@ -213,7 +214,7 @@
 !           Vrxc_tmp(i) =  POT%rvx(i)
 !        ENDDO
 !        call exch(Grid2, coreden, POT%rvx, etxc,eex)
-!        call exch(Grid2, FCOrbit%den, POT%rvx, etxc,eex)
+!        call exch(Grid2, valeden, POT%rvx, etxc,eex)
 !        DO i = 1, Grid2%n
 !           POT%rvx(i) =  Vrxc_tmp(i)-POT%rvx(i)
 !        ENDDO
