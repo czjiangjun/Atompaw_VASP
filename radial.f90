@@ -703,4 +703,245 @@
       ENDDO
     END SUBROUTINE
 !#endif
+
+!*******************************************************************
+!
+!  RAD_POT_WEIGHT
+!  because POT will be required only for integration we
+!  multiply now with the weights
+!
+!*******************************************************************
+
+    SUBROUTINE RAD_POT_WEIGHT( R, ISPIN, LMAX, POT)
+      IMPLICIT NONE
+      REAL(q) :: POT(:,:,:)     ! radial potential
+      TYPE (rgrid) :: R
+      INTEGER LMAX,ISPIN,I,L,M,LM,K
+
+      DO I=1,ISPIN
+      DO L=0,LMAX
+      DO M=0,2*L
+         LM=L*L+M+1
+         DO K=1,R%NMAX
+           POT(K,LM,I)=POT(K,LM,I)*R%SI(K)
+         ENDDO      
+      ENDDO
+      ENDDO
+      ENDDO
+    END SUBROUTINE RAD_POT_WEIGHT
+
+!*******************************************************************
+!
+! Coloumb potential
+! we use the equation
+! POT_lm(R) = 4 pi/(2l+1)[ 1/R^(l+1) \int_0^R RHO_lm(r) r^(l) dr
+!                       + R^l \int_R^Infinity RHO_lm(r) r^(-l-1) dr ]
+!           = 4 pi \int_0^Infinity dr RHO_lm(r) (r,R)<^l / (r,R)>^(l+1)
+!
+!  rho(r) = \sum_lm  RHO_lm(r) Y_lm(r) / r^2
+!    V(r) = \sum_lm  POT_lm(r) Y_lm(r)
+!
+! which can be obtained by partial integration of
+! V  = \int dR 1/R^2  \int  rho(r) dr
+!
+!*******************************************************************
+
+
+      SUBROUTINE RAD_POT_HAR(LL,R,POT,RHO,DHARTREE)
+      USE prec
+      IMPLICIT NONE
+
+      TYPE (rgrid) :: R
+      INTEGER LL
+      REAL(q) :: RHO(:),POT(:)
+      REAL(q) T1(R%NMAX),T2(R%NMAX),V1(R%NMAX),V2(R%NMAX),RL(R%NMAX)
+      REAL(q) DHARTREE,H3,EXT
+      INTEGER N,I,K,L
+
+      N=R%NMAX
+
+      I=0
+    ! additional factor r stems from logarithmic grid
+      DO K=N,1,-1
+         RL(K)=R%R(K)**LL
+         I=I+1
+         T2(I)=RHO(K)/RL(K)
+         T1(I)=RL(K)*R%R(K)*RHO(K)
+      ENDDO
+      H3=R%H/ 3.0_q
+    ! integrate inward (assuming zero moment for grid point NMAX)
+    ! V1 = \int_R^Inf RHO(r) r^l dr
+      V1(1)=0
+      DO L=3,N,2
+        V1(L)  =V1(L-2)+H3*(T1(L-2)+4.0_q*T1(L-1)+T1(L))
+        V1(L-1)=V1(L-2)+H3*(1.25_q*T1(L-2)+2.0_q*T1(L-1)-0.25_q*T1(L))
+      ENDDO
+      IF (MOD(N,2)==0) V1(N)=V1(N-2)+H3*(T1(N-2)+4.0_q*T1(N-1)+T1(N))
+    ! V2 = \int_R^Inf RHO(r) r^(-l-1) dr
+      V2(1)=0
+      DO L=3,N,2
+         V2(L)  =V2(L-2)+H3*(T2(L-2)+4.0_q*T2(L-1)+T2(L))
+         V2(L-1)=V2(L-2)+H3*(1.25_q*T2(L-2)+2.0_q*T2(L-1)-0.25_q*T2(L))
+      ENDDO
+      IF (MOD(N,2)==0) V2(N)=V2(N-2)+H3*(T2(N-2)+4.0_q*T2(N-1)+T2(N))
+
+     ! EXT total moment (i.e. charge)
+     ! EXT-V1(K) = \int_0^R RHO(r) r^l dr 
+      EXT=V1(N)
+      I=0
+      DO K=N,1,-1
+         I=I+1
+         POT(I)=(V2(K)*RL(I)+(EXT-V1(K))/(R%R(I)*RL(I)))*(FELECT*4*PI/(2*LL+1))
+      ENDDO
+    ! double counting corrections are simply obtained by summing over grid
+    ! since int Y_lm(Omega_r) Y_lm(Omega_r) d_Omega_r= 1
+      DHARTREE=0
+      DO K=1,N
+         DHARTREE=DHARTREE+POT(K)*(RHO(K)*R%SI(K))
+      ENDDO
+      END SUBROUTINE
+
+
+
+
+!*******************************************************************
+!
+! calculate the LDA contribution to the exchange correlation
+! energy and to the potentials
+! non spin polarised case and below the spinpolarised case
+!
+! following Bloechl we use a Taylor expansion of the
+! exchange correlation energy around the spherical density
+!  E_xc = \int d Omega r^2 dr
+!'        eps_xc( n_0(r)) + 1/2 v_xc'(n_0) Y_L rho_L(r) Y_L rho_L(r)
+! (tick denotes derivative w.r.t. n_0)
+! the potential is defined as
+!  v_L(r) = var E_xc / var n_L(r) / Y_L
+! (since  the factor  Y_L is applied later in the program (see above)
+!  we have to divide by Y_L)
+!
+!
+!*******************************************************************
+
+   SUBROUTINE RAD_LDA_XC( R, TREL, LMAX_CALC, RHOT, RHO, POT, DEXC, DVXC, LASPH)
+      USE prec
+      USE setexm
+      IMPLICIT NONE
+      TYPE (rgrid) :: R
+      LOGICAL TREL      ! relativistic corrections to exchange
+      LOGICAL LASPH     ! wether to calculate aspherical corrections
+      INTEGER LMAX_CALC ! maximum L
+      REAL(q) RHOT(:)   ! spherical charge + core charge density
+      REAL(q) RHO(:,:)  ! charge distribution see above
+      REAL(q) POT(:,:)  ! potential
+      REAL(q) DEXC      ! exchange correlation energy
+      REAL(q) DVXC      ! V_xc rho
+! local
+      REAL(q) EXCA(4)
+      REAL(q) SIM_FAKT, RHOP, EXT, VXT, DVXC1, RHOPA, SCALE
+      INTEGER K,LM
+
+      SCALE=2*SQRT(PI)
+      DO K=1,R%NMAX
+! MM
+!        IF (RHOT(K) <= 0 ) CYCLE
+         IF (RHOT(K) <= 1E-99_q ) CYCLE
+! MM
+         CALL EXCOR_DER_PARA(RHOT(K),LMAX_CALC,EXCA,TREL)
+
+         SIM_FAKT= R%SI(K)*R%R(K)*R%R(K)
+         RHOP    = RHO(K,1)/(R%R(K)*R%R(K))
+
+         ! store v_xc(r) / Y_0
+         POT(K,1)=POT(K,1)+EXCA(2)*SCALE
+         !  \int v_xc(r)  rho_0(r) Y_0 4 Pi r^2 dr
+         DVXC    =DVXC    +EXCA(2) *  RHOP*SCALE*SIM_FAKT
+         !  \int eps_xc(r) 4 pi r^2 dr
+         DEXC    =DEXC    +EXCA(1) *4*PI*SIM_FAKT
+         EXT=0
+         VXT=0
+         IF (LASPH) THEN
+         DO LM=2,(LMAX_CALC+1)*(LMAX_CALC+1)
+            RHOPA=RHO(K,LM)/ (R%R(K)*R%R(K)) ! rho_L
+            ! corrections to energy
+            ! 1/2 \int v_xc p(n_0) Y_L rho_L(r) Y_L rho_L(r) d Omega r^2 dr
+            !  = 1/2 \int v_xc p(n_0) rho_L(r) rho_L(r) r^2 dr
+            EXT =EXT +(EXCA(3)*RHOPA*RHOPA)/2
+            ! correction to L=0 potential
+            ! 1/2  \int v_xc''(n_0) Y_L rho_L(r) Y_L rho_L(r) d Omega =
+            ! \int Y_0 (v_xc''(n_0) rho_L(r) rho_L(r) Y_0/2) d Omega
+            DVXC1 = (EXCA(4)*RHOPA*RHOPA)/2/SCALE
+            ! \int 1/2 v_xc''(n_0) Y(L) rho_L(r) Y(L) rho_L(r) Y(0) rho_0 d Omega r^2 dr
+            ! =\int  Y_0/2 v_xc''(n_0) rho_L(r) rho_L(r)  r^2 dr
+            VXT=VXT + DVXC1*RHOP
+            POT(K,1)=POT(K,1)+DVXC1
+
+            ! L/=0 potentials
+            ! \int Y_L (v_xc p(n_0) \rho_L)
+            POT(K,LM)=POT(K,LM)+ (EXCA(3)*RHOPA)
+            ! \int v_xc p(n_0) \rho_L Y_L \rho_L Y_L d Omega r^2 dr
+            ! =  \int v_xc p(n_0)  \rho_L \rho_L r^2 dr
+            VXT=VXT+EXCA(3)*RHOPA*RHOPA
+         ENDDO
+         ENDIF
+         DEXC=DEXC + EXT*SIM_FAKT
+         DVXC=DVXC + VXT*SIM_FAKT
+      ENDDO
+
+   END SUBROUTINE RAD_LDA_XC
+
+
+!*******************************************************************
+!
+! calculate the GGA contribution to the exchange correlation
+! energy and to the potentials
+! only spherical contributions are accounted for
+!
+!*******************************************************************
+
+    SUBROUTINE RAD_GGA_XC( R, TLDA, RHOT, RHO, POT, DEXC_GGA, DVXC_GGA)
+      USE prec
+      IMPLICIT NONE
+      TYPE (rgrid) :: R
+      LOGICAL TLDA      ! include LDA contributions  (usually .FALSE.)
+      REAL(q) RHOT(:)   ! spherical charge + core charge density
+      REAL(q) RHO(:)    ! spherical charge
+      REAL(q) POT(:)    ! potential
+      REAL(q) DEXC_GGA  ! exchange correlation energy
+      REAL(q) DVXC_GGA  ! V_xc rho
+! local
+      REAL(q) SIM_FAKT, RHOP, EXT, VXT, DEXC1, DVXC1, SCALE
+      REAL(q) T1(R%NMAX),T2(R%NMAX),V1(R%NMAX)
+      INTEGER K
+
+      SCALE=2*SQRT(PI)
+
+
+      CALL GRAD(R,RHOT,T1)
+      DO K=1,R%NMAX
+!#ifdef vector
+!         CALL GGA91_WB(RHOT(K)*AUTOA3,T1(K)*AUTOA4,EXT,DEXC1,DVXC1)
+!#else
+         CALL GGAALL(RHOT(K)*AUTOA3,T1(K)*AUTOA4,EXT,DEXC1,DVXC1,.NOT.TLDA)
+!#endif
+         SIM_FAKT=R%SI(K)*SCALE
+         DEXC_GGA=DEXC_GGA+(EXT*RYTOEV)*RHOT(K)*(SCALE*R%R(K)*R%R(K))*SIM_FAKT
+         
+         !  store d f/ d (d rho )   in T2
+         T2(K) = DVXC1*RYTOEV*AUTOA
+         !  store d f/ d rho  in T1
+         T1(K) = DEXC1*RYTOEV
+      ENDDO
+      CALL GRAD(R,T2,V1)
+      
+      DO K=1,R%NMAX
+         VXT     = T1(K) - V1(K) - 2*T2(K)/ R%R(K)
+         SIM_FAKT=R%SI(K)*SCALE
+         DVXC_GGA=DVXC_GGA+VXT*RHO(K)*SIM_FAKT
+         POT(K)=POT(K)+VXT*SCALE
+      ENDDO
+
+    END SUBROUTINE RAD_GGA_XC
+
+
   END MODULE radial

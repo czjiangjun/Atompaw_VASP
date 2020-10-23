@@ -33,6 +33,7 @@
 ! HSQDTM = (plancks CONSTANT/(2*PI))**2/(2*ELECTRON MASS)
 !
       REAL(q),PARAMETER  :: PI0 =3.141592653589793238_q,TPI=2*PI0
+      REAL(q),PARAMETER  :: PI = 3.14159265358979323846264338327950_q
       COMPLEX(q),PARAMETER  :: CITPI = (0._q,1._q)*TPI
       REAL(q),PARAMETER  :: FELECT = 2*AUTOA*RYTOEV,EDEPS=4*PI0*2*RYTOEV*AUTOA,&
      &                   HSQDTM = RYTOEV*AUTOA*AUTOA
@@ -851,22 +852,22 @@
       END SUBROUTINE
 
 
-         FUNCTION ERRF(x)
-           USE PREC
-           INTEGER :: SIG
-           REAL(q) :: x,errf,t,y
-           REAL(q),PARAMETER :: a1 =  0.254829592
-           REAL(q),PARAMETER :: a2 = -0.284496736
-           REAL(q),PARAMETER :: a3 =  1.421413741
-           REAL(q),PARAMETER :: a4 = -1.453152027
-           REAL(q),PARAMETER :: a5 =  1.061405429
-           REAL(q),PARAMETER :: p  =  0.3275911
- 
-           SIG = 1
-           IF (x < 0.) SIG = -1
-           x = ABS(x)
-           t = 1._q/(1._q + p*x)
-           y = 1._q - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*EXP(-x*x)
-           errf=SIG*y
-         END FUNCTION ERRF
+!         FUNCTION ERRF(x)
+!           USE PREC
+!           INTEGER :: SIG
+!           REAL(q) :: x,errf,t,y
+!           REAL(q),PARAMETER :: a1 =  0.254829592
+!           REAL(q),PARAMETER :: a2 = -0.284496736
+!           REAL(q),PARAMETER :: a3 =  1.421413741
+!           REAL(q),PARAMETER :: a4 = -1.453152027
+!           REAL(q),PARAMETER :: a5 =  1.061405429
+!           REAL(q),PARAMETER :: p  =  0.3275911
+! 
+!           SIG = 1
+!           IF (x < 0.) SIG = -1
+!           x = ABS(x)
+!           t = 1._q/(1._q + p*x)
+!           y = 1._q - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*EXP(-x*x)
+!           errf=SIG*y
+!         END FUNCTION ERRF
 

@@ -358,15 +358,12 @@ CONTAINS
    ELSE IF (Projectorindex==HARTREE_FOCK) THEN
     CALL make_hf_tp_only(Grid,Pot,PAW,ifinput)
    ELSE IF (Projectorindex==MODRRKJ) THEN
-<<<<<<< HEAD
 !    CALL makebasis_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
     CALL VASP_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
-=======
     CALL makebasis_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
    ELSE IF (Projectorindex==VASPRRKJ) THEN
            WRITE(6,*) 'TEST_VASP'
     CALL VASP_RRKJ(Grid,Pot,Orthoindex,ifinput,success)
->>>>>>> 9f0c3a08a83de9a1d9398fde1a521c5d875cbfd9
    ENDIF
 
       WRITE(ifen,*) TRIM(PAW%Vloc_description)

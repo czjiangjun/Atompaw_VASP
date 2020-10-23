@@ -126,7 +126,9 @@ am__objects_1 = abinitinterface.lo aeatom.lo anderson_driver.lo \
 	numerov_mod.lo paw_sub.lo pseudo_sub.lo pseudo.lo \
 	pseudodata.lo pwscfinterface.lo radialsr.lo report_mod.lo \
 	search_sort.lo xmlinterface.lo \
-	ini.lo optreal.lo radial.lo setlocalpp.lo pseudo_vasp.lo vasp_pseudo.lo 
+	ini.lo asa.lo optreal.lo radial.lo setlocalpp.lo \
+	xclib.lo xclib_grad.lo \
+	pseudo_vasp.lo  vasp_pseudo.lo 
 am_libatompaw_la_OBJECTS = $(am__objects_1) atompaw_lib.lo
 am__objects_2 = pkginfo.lo
 nodist_libatompaw_la_OBJECTS = $(am__objects_2)
@@ -334,8 +336,11 @@ atp_srcs = \
   pseudo_sub.f90 \
   pseudo.f90 \
   ini.f90 \
+  asa.f90 \
   optreal.f90 \
   radial.f90 \
+  xclib.f90 \
+  xclib_grad.f90 \
   setlocalpp.f90 \
   pseudo_vasp.f90 \
   vasp_pseudo.f90 \
@@ -848,9 +853,15 @@ xmlinterface.$(LTOBJEXT): atomdata.$(LTOBJEXT) globalmath.$(LTOBJEXT) \
 
 ini.$(LTOBJEXT):
 
+asa.$(LTOBJEXT): ini.$(LTOBJEXT)
+
 optreal.$(LTOBJEXT): ini.$(LTOBJEXT)
 
-radial.$(LTOBJEXT): ini.$(LTOBJEXT)
+xclib.$(LTOBJEXT): ini.$(LTOBJEXT) 
+
+xclib_grad.$(LTOBJEXT): ini.$(LTOBJEXT) xclib.$(LTOBJEXT)
+
+radial.$(LTOBJEXT): ini.$(LTOBJEXT) xclib.$(LTOBJEXT)
 
 setlocalpp.$(LTOBJEXT): ini.$(LTOBJEXT) radial.$(LTOBJEXT)
 
@@ -861,7 +872,8 @@ vasp_pseudo.$(LTOBJEXT): globalmath.$(LTOBJEXT) atomdata.$(LTOBJEXT) aeatom.$(LT
 	excor.$(LTOBJEXT) exx_pseudo.$(LTOBJEXT) hf_pseudo.$(LTOBJEXT) \
 	numerov_mod.$(LTOBJEXT) paw_sub.$(LTOBJEXT) pseudodata.$(LTOBJEXT) \
 	pseudo_sub.$(LTOBJEXT) radialsr.$(LTOBJEXT) pseudo.$(LTOBJEXT) \
-	ini.$(LTOBJEXT) radial.$(LTOBJEXT)  setlocalpp.$(LTOBJEXT) pseudo_vasp.$(LTOBJEXT) \
+	ini.$(LTOBJEXT) asa.$(LTOBJEXT) xclib.$(LTOBJEXT) radial.$(LTOBJEXT)  \
+	setlocalpp.$(LTOBJEXT) pseudo_vasp.$(LTOBJEXT) \
 	atompaw_report.$(LTOBJEXT)
 
 

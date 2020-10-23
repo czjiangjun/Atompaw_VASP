@@ -93,16 +93,22 @@ def Data_compare_Fig(Properties, data, name):
 
     plot_command_VASP = "plot "+'"VASP_'+data +'" '+'u 1:2 w p pt 3 lw 1.2 title "'+TYPE1+'"'
     plot_command_ATOM = "replot "+'"ATOM_'+data +'" '+'u 1:2 w l lt 5 lw 1.8 title "'+TYPE2+'"'
+#    plot_command_ATOM = "replot "+'"VASP_'+data +'" '+'u 1:3 w l lt 5 lw 1.8 title "'+TYPE2+'"'
 #    print(plot_command_VASP)
 #    exit ()
     Fig_title = "set title "+ '"' + data +'"'
     Fig_name = name+".eps"
 
     gp.c(Fig_title)
+    gp.c('set xrange[0:1.5]')
     if (Properties == "wavefunction"):
-       gp.c('set xrange[0:1.5]')
-       gp.c('set yrange[-1.5:1.5]')
-    gp.c('set yrange[-50:100]')
+       gp.c('set yrange[-1:1.5]')
+    elif (Properties == "density" and data == "PCORE"):
+       gp.c('set yrange[0:1]')
+    elif (Properties == "density" and data == "CORE"):
+       gp.c('set yrange[0:9]')
+    else:
+       gp.c('set yrange[-50:250]')
     gp.c(plot_command_VASP)
     gp.c(plot_command_ATOM)
     # gp.c('plot "VASP_WAE" u 1:2 w p pt 3 ps 2 title "VASP-AE"')
@@ -118,11 +124,12 @@ def main():
 #    time.sleep(5)
 
 #    Data_Fig("potential", "VASP", "POTAE", "POTAE_data")
-#    Data_compare_Fig("density", "CORE", "CORE_data")
-#    Data_compare_Fig("density", "PCORE", "PCORE_data")
-#    Data_compare_Fig("wavefunction", "WAE", "WAE_data")
-#    Data_compare_Fig("wavefunction", "WPS", "WPS_data")
+    Data_compare_Fig("wavefunction", "WAE", "WAE_data")
+    Data_compare_Fig("wavefunction", "WPS", "WPS_data")
+    Data_compare_Fig("density", "CORE", "CORE_data")
+    Data_compare_Fig("density", "PCORE", "PCORE_data")
     Data_compare_Fig("potential", "POTAE", "POTAE_data")
+#    Data_compare_Fig("potential", "POTAE", "VAL_data")
 
 if __name__ == '__main__':
     main()
