@@ -1,7 +1,7 @@
 MODULE report_mod
   USE atomdata
   USE gridmod
-  USE excor
+  USE excor_atom
 
   IMPLICIT NONE
 

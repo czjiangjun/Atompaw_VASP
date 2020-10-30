@@ -1,7 +1,7 @@
 Module PWscfInterface
   USE GlobalMath
   USE atomdata
-  USE excor
+  USE excor_atom
   USE gridmod
   USE interpolation_mod
   USE pseudo_atom

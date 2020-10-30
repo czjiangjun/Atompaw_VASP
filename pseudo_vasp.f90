@@ -435,12 +435,12 @@ MODULE PSEUDO
         ENDIF
         CALL SPLCOF(P(NTYP)%PSPRNL (1,1,CHANNELS+NL) ,NPSRNL,NPSRNL,BOUNDARY)
 !#ifdef debug
-        DO K=1,(NPSRNL-1)*10+1
-           QR=(P(NTYP)%PSRMAX/NPSRNL)/10*(K-1)
-           CALL SPLVAL(QR,F,DUMMY,P(NTYP)%PSPRNL(1,1,CHANNELS+NL),NPSRNL,NPSRNL)
-           WRITE(78,'(2F14.7)') QR,F
-        ENDDO
-        WRITE(78,*)
+!        DO K=1,(NPSRNL-1)*10+1
+!           QR=(P(NTYP)%PSRMAX/NPSRNL)/10*(K-1)
+!           CALL SPLVAL(QR,F,DUMMY,P(NTYP)%PSPRNL(1,1,CHANNELS+NL),NPSRNL,NPSRNL)
+!           WRITE(78,'(2F14.7)') QR,F
+!        ENDDO
+!        WRITE(78,*)
 !#endif
 
 

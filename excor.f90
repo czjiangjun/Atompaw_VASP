@@ -1,4 +1,4 @@
-MODULE excor
+MODULE excor_atom
   USE atomdata, only : scalarrelativistic
   USE globalmath
   USE gridmod
@@ -456,4 +456,4 @@ CONTAINS
     END if
   END SUBROUTINE exch
 
-END MODULE excor
+END MODULE excor_atom

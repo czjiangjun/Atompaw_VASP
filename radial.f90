@@ -706,6 +706,153 @@
 
 !*******************************************************************
 !
+!  RAD_POT
+!  calculate the radial potential from the radial chargedensity
+!  the charge density rho(r) is given by
+!     rho(r) =  \sum_lm rho_lm(r) * Y_lm(r)  / r^2
+!  the potential is given by
+!       V(r) =  \sum_lm pot_lm(r) * Y_lm(r)
+!
+!  where rho_lm(r) is stored in RHO(2l+1+m,..) l=0,..,LMAX, m=0,..,2*l
+!  and   pot_lm(r) is stored in POT(2l+1+m,..)
+!
+! in many places we use a scaling factor 2 sqrt(pi)
+! the "real" charge density for L=0 angular quantum number is
+!   n_0= rho_00 Y_00 = RHO(r,0) / (2 sqrt(pi))
+! for other channels it is
+!   n_lm= rho_lm Y_lm
+! in comments we will always distinct between n_L and rho_L
+!
+! the charge density is supplied as 
+!  total=RHO(:,:,1), magnetization=RHO(:,:,2)
+! the potential however is returned for spin up and spin down 
+!  spin up=POT(:,:,1), spin down=POT(:,:,2)
+!
+!*******************************************************************
+
+
+    SUBROUTINE RAD_POT( R, ISPIN, LMAX, LMAX_CALC, LASPH, &
+         RHO, RHOC, POTC, POT, DOUBLEC, EXCG)
+      USE ini
+      USE setexm
+
+      IMPLICIT NONE
+      INTEGER LMAX, ISPIN, LMAX_CALC
+      LOGICAL :: LASPH          ! non spherical contributions
+      REAL(q) :: RHOC(:)        ! core charge for exchange correlation
+      REAL(q) :: POTC(:)        ! froze core potential
+      REAL(q) :: RHO(:,:,:)     ! charge distribution see above
+      ! RHO(:,:,1) contains total charge distribution
+      ! RHO(:,:,2) magnetization charge distribution
+      REAL(q) :: POT(:,:,:)     ! potential
+      ! POT(:,:,1) up   component
+      ! POT(:,:,2) down component
+      TYPE (rgrid) :: R
+      REAL(q) :: EXCG           ! exchange energy only
+      REAL(q) :: DOUBLEC        ! double counting corrections
+    ! local variables
+      REAL(q) RHOT(R%NMAX,ISPIN)
+      INTEGER K,N,I,L,M,LM
+      REAL(q) SCALE,SUM
+      
+      LOGICAL,PARAMETER :: TREL=.TRUE. ! use relativistic corrections to exchange
+      LOGICAL,PARAMETER :: TLDA=.TRUE. ! calculate LDA contribution seperately
+      ! TLDA=.FALSE. works only for Perdew Burke Ernzerhof
+      ! in this case non spherical contributions are missing
+      REAL(q) :: DHARTREE,DEXC_LDA,DVXC_LDA,DEXC_GGA,DVXC_GGA
+      REAL(q) :: TMP((LMAX+1)*(LMAX+1),ISPIN)
+!
+      REAL(q) SIM_FAKT, RHOP, EXT, VXT, DEXC1, DVXC1
+      REAL(q) T1(R%NMAX),T2(R%NMAX),V1(R%NMAX)
+
+      POT=0
+
+      SCALE=2*SQRT(PI)
+      N=R%NMAX
+
+      DHARTREE=0
+      DO L=0,LMAX_CALC
+      DO M=0,2*L
+         LM=L*L+M+1
+         CALL RAD_POT_HAR(L,R,POT(:,LM,1),RHO(:,LM,1),SUM)
+!         IF (ISPIN==2) POT(:,LM,2)=POT(:,LM,1)
+         DHARTREE=DHARTREE+SUM
+         TMP(LM,1)=SUM
+      ENDDO
+      ! WRITE(0,'(I2,10F12.7)') L, (TMP(LM,1),LM=L*L+1,(L+1)*(L+1))
+      ENDDO
+      DO K=1,N
+         POT(K,1,1)=POT(K,1,1)+POTC(K)*SCALE
+      ENDDO
+!      IF (ISPIN==2) POT(:,1,2)=POT(:,1,1)
+!========================================================================
+! exchange correlation energy, potential
+! and double counting corrections
+!========================================================================
+      DEXC_LDA=0
+      DVXC_LDA=0
+      DEXC_GGA=0
+      DVXC_GGA=0
+
+!      IF (ISPIN==1) THEN
+        DO K=1,N
+          RHOT(K,1)=(RHO(K,1,1)+RHOC(K))/ (SCALE*R%R(K)*R%R(K)) ! charge density rho_0 Y(0)
+        ENDDO
+
+!      ELSE
+!        DO K=1,N
+!         RHOT(K,1)=(RHO(K,1,1)+RHOC(K))/ (SCALE*R%R(K)*R%R(K)) ! charge density n_0=rho_0 Y(0)
+!         RHOT(K,2)= RHO(K,1,2)/ (SCALE*R%R(K)*R%R(K))          ! magnetization
+!        ENDDO
+
+!      ENDIF
+      ! WRITE(*,'(9F14.7)') POT(R%NMAX-10,:,:)
+!========================================================================
+! LDA+ GGA if required
+!========================================================================
+!      IF (.NOT. LASPH) THEN
+       IF (TLDA) THEN
+            
+!            IF (ISPIN==1) THEN
+               CALL RAD_LDA_XC( R, TREL, LMAX_CALC, RHOT(:,1), RHO(:,:,1), POT(:,:,1), DEXC_LDA, DVXC_LDA, .TRUE.)
+!            ELSE
+!               CALL RAD_LDA_XC_SPIN( R, TREL, LMAX_CALC, RHOT, RHO, POT, DEXC_LDA, DVXC_LDA, .TRUE.)
+!            ENDIF
+            
+       ELSE
+            
+!            IF (ISPIN==1) THEN
+               CALL RAD_GGA_XC( R, TLDA, RHOT(:,1), RHO(:,1,1), POT(:,1,1), DEXC_GGA, DVXC_GGA)
+!            ELSE
+!               DO K=1,N
+!                  RHOT(K,1)=(RHO(K,1,1)+RHOC(K)+RHO(K,1,2))/(2*SCALE*R%R(K)*R%R(K)) ! up
+!                  RHOT(K,1)=MAX(RHOT(K,1), 1E-7_q)
+!                  RHOT(K,2)=(RHO(K,1,1)+RHOC(K)-RHO(K,1,2))/(2*SCALE*R%R(K)*R%R(K)) ! down
+!                  RHOT(K,2)=MAX(RHOT(K,2), 1E-7_q)
+!               ENDDO
+!               
+!               CALL RAD_GGA_XC_SPIN( R, TLDA, RHOT, RHO(:,1,:), POT(:,1,:), DEXC_GGA, DVXC_GGA)
+!            ENDIF
+         ENDIF
+!      ELSE
+!         CALL RAD_GGA_ASPH( R, ISPIN, LMAX_CALC, &
+!              RHO, RHOC, POTC, DEXC_LDA, DEXC_GGA, DVXC_LDA, DVXC_GGA, POT )
+!      ENDIF
+!========================================================================
+! thats it
+!========================================================================
+      DOUBLEC= -DHARTREE/2+DEXC_LDA-DVXC_LDA+DEXC_GGA-DVXC_GGA
+      EXCG= DEXC_LDA+DEXC_GGA
+!#ifdef debug
+      WRITE(*,1)  N,-DHARTREE/2, -DVXC_LDA-DVXC_GGA, DEXC_LDA+DEXC_GGA
+1     FORMAT(' -Hartree, -vxc, exc:',I4,3F14.7)
+!#endif
+
+    END SUBROUTINE RAD_POT
+
+
+!*******************************************************************
+!
 !  RAD_POT_WEIGHT
 !  because POT will be required only for integration we
 !  multiply now with the weights

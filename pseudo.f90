@@ -2,7 +2,7 @@ MODULE pseudo_atom
   USE GlobalMath
   USE atomdata
   USE aeatom
-  USE excor
+  USE excor_atom
   USE exx_pseudo
   USE hf_pseudo
   USE numerov_mod

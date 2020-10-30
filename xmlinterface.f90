@@ -15,7 +15,7 @@ Module XMLInterface
  use atomdata
  use GlobalMath
  use gridmod
- use excor
+ use excor_atom
  use pseudo_atom
  use pseudodata
  use pkginfo

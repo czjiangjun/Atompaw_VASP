@@ -2,7 +2,7 @@ MODULE pseudo_sub
   USE globalmath
   USE gridmod
   USE pseudodata
-  USE excor
+  USE excor_atom
   USE fock
 
   IMPLICIT NONE

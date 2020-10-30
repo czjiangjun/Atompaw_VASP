@@ -1,7 +1,7 @@
 MODULE ldagga_mod
   USE atomdata
   USE anderson_driver
-  USE excor
+  USE excor_atom
   USE general_mod
   USE globalmath
   USE gridmod

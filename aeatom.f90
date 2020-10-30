@@ -1,6 +1,6 @@
 MODULE AEatom
   USE atomdata
-  USE excor
+  USE excor_atom
   USE exx_mod
   USE general_mod
   USE globalmath
