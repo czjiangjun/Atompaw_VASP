@@ -39,16 +39,16 @@ v
 c
 v
 1
-1.85  1.3   1.5    1.5
+1.55  1.3   1.5    1.5
 y
 -0.50
 n
 y
-0.22
+0.32
 n
 vasprrkj  gramschmidtortho  Besselshape
-1 2   MTROULLIER
-1.3
+1 3   MTROULLIER
+1.5
 1.5
 1.6
 1.7
@@ -107,6 +107,8 @@ def Data_compare_Fig(Properties, data, name):
        gp.c('set yrange[0:1]')
     elif (Properties == "density" and data == "CORE"):
        gp.c('set yrange[0:9]')
+    elif (Properties == "potential" and data == "POTPSC"):
+       gp.c('set yrange[-180:-20]')
     else:
        gp.c('set yrange[-50:250]')
     gp.c(plot_command_VASP)
@@ -124,12 +126,12 @@ def main():
 #    time.sleep(5)
 
 #    Data_Fig("potential", "VASP", "POTAE", "POTAE_data")
-    Data_compare_Fig("wavefunction", "WAE", "WAE_data")
-    Data_compare_Fig("wavefunction", "WPS", "WPS_data")
-    Data_compare_Fig("density", "CORE", "CORE_data")
-    Data_compare_Fig("density", "PCORE", "PCORE_data")
-    Data_compare_Fig("potential", "POTAE", "POTAE_data")
-#    Data_compare_Fig("potential", "POTAE", "VAL_data")
+#    Data_compare_Fig("wavefunction", "WAE", "WAE_data")
+#    Data_compare_Fig("wavefunction", "WPS", "WPS_data")
+#    Data_compare_Fig("density", "CORE", "CORE_data")
+#    Data_compare_Fig("density", "PCORE", "PCORE_data")
+#    Data_compare_Fig("potential", "POTAE", "POTAE_data")
+    Data_compare_Fig("potential", "POTPSC", "POTPSC_data")
 
 if __name__ == '__main__':
     main()

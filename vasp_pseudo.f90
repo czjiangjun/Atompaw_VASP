@@ -2,11 +2,12 @@
          USE pseudo         ! VASP_Pseudo
          USE base           ! VASP_base
          USE ini            ! VASP_ini/PREC
+         USE setexm
          USE PSEUDO_struct  ! VASP_Pseudo_struct
          USE GlobalMath
          USE atomdata
          USE aeatom
-         USE excor
+         USE excor_atom
          USE exx_pseudo
          USE hf_pseudo
          USE numerov_mod
@@ -37,8 +38,9 @@
          INTEGER :: NTYP, NTYPD, LDIM, LDIM2, LMDIM,CHANNELS, LMAX, LMMAX, LI
          INTEGER :: LMAX_TABLE
          REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
-         REAL(q) :: QTEST,SCALE
-         REAL(q), ALLOCATABLE :: RHO(:,:,:), V(:,:,:), RHOAE00(:), RHOV(:)
+         REAL(q) :: QTEST,SCALE, DOUBLEAE, EXCG
+         REAL(q), ALLOCATABLE :: RHO(:,:,:), V(:,:,:), RHOAE00(:), RHOV(:), POT_AE(:)
+         REAL(q), ALLOCATABLE :: V1(:,:,:), V2(:,:,:)
          REAL(q), ALLOCATABLE :: CRHODE(:,:)
          REAL(q), ALLOCATABLE :: RHOLM(:)
          CHARACTER(LEN=2) :: TYPE(1)
@@ -61,6 +63,7 @@
          IU9 = 13
         IU11 = 15
         IU15 = 19
+        IU17 = 21
 
          IU8 = 12
         IU10 = 14
@@ -68,6 +71,7 @@
         IU13 = 17
         IU14 = 18
         IU16 = 20
+        IU18 = 22
 
          Call RD_PSEUDO(INFO, P, NTYP, NTYPD, LDIM, LDIM2, LMDIM, POMASS,     &
      &                  RWIGS, TYPE,                       &
@@ -109,15 +113,20 @@
       CALL SET_SIMP(PP%R)
       LMMAX = (PP%LMAX+1)**2
       ALLOCATE(RHO(PP%R%NMAX, LMMAX,1), V(PP%R%NMAX, LMMAX,1), RHOAE00(PP%R%NMAX))
-      ALLOCATE(CRHODE(LDIM,LDIM))
+      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
+      ALLOCATE(CRHODE(LDIM,LDIM), POT_AE(PP%R%NMAX))
       ALLOCATE(RHOLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
       RHO = 0
+!
+!
+!!!!!!!!!!!!!    RELATION BETWEEN PP%WAE and RHO:    RHOAE00(:) = !RHOAE(:)/SCALE   !!!!!!
+!
 !      DO io =1,CHANNELS
 !         LI = PP%LPS(io)
 !!         WRITE(6,*) 'OCC1=', PP%QATO(io,io)
 !         RHOAE00(:) = RHOAE00(:)+PP%WAE(:,io)**2*PP%QATO(io,io)*(2*LI+1)
 !      ENDDO
-
+!
       LMAX_TABLE=6; CALL YLM3ST_(LMAX_TABLE)
       CALL SET_CRHODE_ATOM(CRHODE,PP)
       CALL TRANS_RHOLM(CRHODE, RHOLM, PP)
@@ -138,17 +147,30 @@
 !      RHO(:,1,1)=RHOAE00(:)
 
       CALL SIMPI(PP%R,RHOAE00, QTEST)
-      WRITE(6,*) 'QTEST=', QTEST
+!      WRITE(6,*) 'QTEST=', QTEST*SCALE
+!      WRITE(6,*) 'QTEST=', QTEST
 
       V=0
-      CALL VASP_POT(RHO, 1, PP%R, V, PP%RHOAE)
+      POT_AE = 0
+      CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
+!      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
+!       RHO, PP%RHOAE, POT_AE, V1, DOUBLEAE, EXCG)
+      CALL VASP_POT(RHO, 0, PP%R, V2, PP%RHOAE)
 
       OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='OLD')
       ENDIF
           DO j=1, PP%R%NMAX
-             WRITE(IU15,*) PP%R%R(j), -V(j,1,1)*SCALE/RYTOEV*2.0, PP%POTAE(j) 
+             WRITE(IU15,'(4f20.8)') PP%R%R(j),  PP%POTAE(j), -V2(j,1,1)/SCALE+13/PP%R%R(j)/FELECT
+          ENDDO
+
+      OPEN(UNIT=21,FILE='VASP_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=21,FILE='VASP_POTPSC',STATUS='OLD')
+      ENDIF
+          DO j=1, PP%R%NMAX
+             WRITE(IU17,'(4f20.8)') PP%R%R(j),  PP%POTPSC(j), PP%POTPS(j)
           ENDDO
 
 
@@ -208,8 +230,8 @@
       IF (IERR/=0) THEN
          OPEN(UNIT=16,FILE='ATOM_VAL',STATUS='OLD')
       ENDIF
-          DO j=1,Grid0%n 
-             WRITE(IU12,*) Grid0%r(j)*AUTOA, RHOV(j)*AUTOA, FC%valeden(j)
+          DO j=1,PAW%irc 
+             WRITE(IU12,*) Grid0%r(j)*AUTOA, RHOV(j), FC%valeden(j)
           ENDDO
 
          Call Report_Pseudobasis(Grid0,PAW,ifen)
@@ -242,8 +264,9 @@
          USE atomdata
          USE aeatom
          USE atomdata
-        TYPE(GridInfo), INTENT(IN) :: Grid2
+        TYPE(GridInfo) :: Grid2
         TYPE(PotentialInfo) :: POT
+        INTEGER :: N
         REAL(8), INTENT(IN) :: coreden(:)
         REAL(8), INTENT(IN) :: valeden(:)
         REAL(8), ALLOCATABLE :: density(:), Vrxc_tmp(:)
@@ -251,6 +274,7 @@
 
         SCALE = 2.0*sqrt(PI0)
 
+!        N= Grid2%n
         call InitPot(POT, Grid2%n)
 
         call Get_Nuclearpotential(Grid2, AEPot)
@@ -258,18 +282,25 @@
 
         allocate (density(Grid2%n), Vrxc_tmp(Grid2%n))
         density = 0.d0
-        DO i = 1, Grid2%n
+        DO i = 1, Grid2%n 
 !           density(i) = coreden(i)+FCOrbit%den(i)
            density(i) = coreden(i)+valeden(i)
         ENDDO
 
+!        Grid2%n = N
+!        Grid2%n=FindGridIndex(Grid, PAW%rc)
+!        WRITE(6,*) 'Grid_N=',Grid2%n
 !        call poisson(Grid2, qc, coreden, POT%rvh, ecoul, v0)
         call poisson(Grid2, qc, valeden, POT%rvh, ecoul, v0)
 !        call poisson(Grid2, qc, density, POT%rvh, ecoul, v0)
-        WRITE(6,*) 'qc, ecoul, v0=', qc,ecoul, v0, POT%rvh(Grid2%n)
+!        DO i = 1, Grid2%n 
+!           density(i) = coreden(i)+FCOrbit%den(i)
+!           WRITE(25,*) Grid2%r(Grid2%n), qc, POT%rvh(Grid2%n)
+!        ENDDO
 
         call exch(Grid2, density, POT%rvx, etxc,eex)
 
+!        Grid2%n = N
 
 
 
@@ -283,7 +314,7 @@
 !        ENDDO
 
 !         POT%rv=(POT%rvh+POT%rvx)*SCALE
-         POT%rv=AEPot%rvn+POT%rvh+POT%rvx
+         POT%rv=AEPot%rvn/FELECT+(POT%rvh+POT%rvx)*FELECT*SCALE/2.0*AUTOA
 
         deallocate(density, Vrxc_tmp)
         END SUBROUTINE SetPOTAE
@@ -411,7 +442,7 @@
             V(K,1,1)=V(K,1,1)+VC(K)*SCALE
          ENDDO
       ENDIF
-      IF (ISPIN==2.OR.ISPIN==4) V(:,:,2)=V(:,:,1)
+!      IF (ISPIN==2.OR.ISPIN==4) V(:,:,2)=V(:,:,1)
 
 !========================================================================
 ! add nuclear potential
@@ -419,8 +450,9 @@
 
       DO K=1,R%NMAX
          V(K,1,1)=V(K,1,1)-FELECT*SCALE*Z/R%R(K)
+         WRITE(77, *) R%R(K), V(K,1,1)
       ENDDO
-      IF (ISPIN==2.OR.ISPIN==4) V(:,1,2)=V(:,1,1)
+!      IF (ISPIN==2.OR.ISPIN==4) V(:,1,2)=V(:,1,1)
 
 !========================================================================
 ! LDA exchange correlation energy, potential
