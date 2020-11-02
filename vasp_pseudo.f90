@@ -19,16 +19,17 @@
          USE atompaw_report
 !
      CONTAINS
-      SUBROUTINE vasp_pseudo(ifinput, ifen, Grid0, Orbit, PotAE, Pot, success)!(ifinput,ifen,Grid)
+      SUBROUTINE vasp_pseudo(ifinput, ifen, Grid0, Orbit, Pot_AE, Pot_FC, success)!(ifinput,ifen,Grid)
          IMPLICIT COMPLEX(q)   (C)
          IMPLICIT REAL(q)  (A-B,D-H,O-Z)
 
          TYPE(GridInfo), INTENT(IN) :: Grid0
 !         REAL(8), INTENT(IN) :: coreden(:)
          Type(OrbitInfo), INTENT(IN) :: Orbit
-         TYPE(PotentialInfo), INTENT(IN) :: PotAE
-         TYPE(PotentialInfo), INTENT(IN) :: Pot
-
+         TYPE(PotentialInfo), INTENT(IN) :: Pot_AE
+         TYPE(PotentialInfo), INTENT(IN) :: Pot_FC
+         REAL(q), ALLOCATABLE :: PotHr(:), PotXCr(:), PotAEr(:)
+         REAL(q), ALLOCATABLE :: PotAE(:), PotAEr_00(:), PotPS(:), PotPSC(:)
          TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
          TYPE(potcar), POINTER :: PP
          TYPE(INFO_STRUCT) :: INFO
@@ -39,8 +40,8 @@
          INTEGER :: LMAX_TABLE
          REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
          REAL(q) :: QTEST,SCALE, DOUBLEAE, EXCG
-         REAL(q), ALLOCATABLE :: RHO(:,:,:), V(:,:,:), RHOAE00(:), RHOV(:), POT_AE(:)
-         REAL(q), ALLOCATABLE :: V1(:,:,:), V2(:,:,:)
+         REAL(q), ALLOCATABLE :: RHO(:,:,:), V(:,:,:), RHOAE00(:), RHOV(:)
+!         REAL(q), ALLOCATABLE :: V1(:,:,:), V2(:,:,:)
          REAL(q), ALLOCATABLE :: CRHODE(:,:)
          REAL(q), ALLOCATABLE :: RHOLM(:)
          CHARACTER(LEN=2) :: TYPE(1)
@@ -64,6 +65,7 @@
         IU11 = 15
         IU15 = 19
         IU17 = 21
+        IU19 = 23
 
          IU8 = 12
         IU10 = 14
@@ -72,6 +74,7 @@
         IU14 = 18
         IU16 = 20
         IU18 = 22
+        IU20 = 24
 
          Call RD_PSEUDO(INFO, P, NTYP, NTYPD, LDIM, LDIM2, LMDIM, POMASS,     &
      &                  RWIGS, TYPE,                       &
@@ -113,8 +116,9 @@
       CALL SET_SIMP(PP%R)
       LMMAX = (PP%LMAX+1)**2
       ALLOCATE(RHO(PP%R%NMAX, LMMAX,1), V(PP%R%NMAX, LMMAX,1), RHOAE00(PP%R%NMAX))
-      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
-      ALLOCATE(CRHODE(LDIM,LDIM), POT_AE(PP%R%NMAX))
+!      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
+      ALLOCATE(CRHODE(LDIM,LDIM))
+!      ALLOCATE(CRHODE(LDIM,LDIM), POT-AE(PP%R%NMAX))
       ALLOCATE(RHOLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
       RHO = 0
 !
@@ -151,37 +155,54 @@
 !      WRITE(6,*) 'QTEST=', QTEST
 
       V=0
-      POT_AE = 0
+!      POT-AE = 0
       CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
 !      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-!       RHO, PP%RHOAE, POT_AE, V1, DOUBLEAE, EXCG)
-      CALL VASP_POT(RHO, 0, PP%R, V2, PP%RHOAE)
+!       RHO, PP%RHOAE, POT-AE, V1, DOUBLEAE, EXCG)
+!      CALL VASP_POT(RHO, 0, PP%R, V2, PP%RHOAE)
+      CALL VASP_POT(RHO, 0, PP%R, V, PP%RHOAE)
 
       OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='OLD')
       ENDIF
           DO j=1, PP%R%NMAX
-             WRITE(IU15,'(4f20.8)') PP%R%R(j),  PP%POTAE(j), -V2(j,1,1)/SCALE+13/PP%R%R(j)/FELECT
+             WRITE(IU15,'(4f20.8)') PP%R%R(j),  PP%POTAE(j), -V(j,1,1)/SCALE+13/PP%R%R(j)/FELECT
           ENDDO
 
-      OPEN(UNIT=21,FILE='VASP_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
+      OPEN(UNIT=21,FILE='VASP_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
-         OPEN(UNIT=21,FILE='VASP_POTPSC',STATUS='OLD')
+         OPEN(UNIT=21,FILE='VASP_POTPS',STATUS='OLD')
       ENDIF
           DO j=1, PP%R%NMAX
-             WRITE(IU17,'(4f20.8)') PP%R%R(j),  PP%POTPSC(j), PP%POTPS(j)
+             WRITE(IU17,'(4f20.8)') PP%R%R(j),  PP%POTPS(j)
+          ENDDO
+
+      OPEN(UNIT=23,FILE='VASP_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=23,FILE='VASP_POTPSC',STATUS='OLD')
+      ENDIF
+          DO j=1, PP%R%NMAX
+             WRITE(IU19,'(4f20.8)') PP%R%R(j),  PP%POTPSC(j)
           ENDDO
 
 
 !!        WRITE(6,*) 'N=', Grid0%n
-          call SetPOTAE(Grid0, FC%coreden, FC%valeden, Pot)
+      ALLOCATE(PotHr(Grid0%n), PotXCr(Grid0%n), PotAEr(Grid0%n))
+      ALLOCATE(PotAEr_00(Grid0%n), PotPS(Grid0%n))
+      ALLOCATE(PotAE(Grid0%n), PotPSC(Grid0%n))
+
       OPEN(UNIT=20,FILE='ATOM_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=20,FILE='ATOM_POTAE',STATUS='OLD')
       ENDIF
+          call SetPOT(Grid0, FC%coreden, FC%valeden, PotHr, PotXCr)
           DO j=1,Grid0%n 
-             WRITE(IU16,*) Grid0%r(j)*AUTOA,(-Pot%rv(j))/(Grid0%r(j))
+!             PotAEr_00(j) = PotHr(j)+PotXCr(j)!+Pot_AE%rvn(j)*2*AUTOA/FELECT**2/SCALE
+             PotAEr(j) = PotHr(j)+PotXCr(j)+Pot_AE%rvn(j)*2/AUTOA/FELECT**2/SCALE
+
+             PotAE(j)= -(Pot_AE%rvn(j)/FELECT+PotAEr(j)*FELECT*SCALE/2.0*AUTOA)/Grid0%r(j)
+             WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAE(j)
           ENDDO
 
          Call setcoretail2(Grid0, FC%coreden)
@@ -202,7 +223,7 @@
              WRITE(IU12,*) Grid0%r(j)*AUTOA, PAW%tcore(j)*AUTOA
           ENDDO
 !
-         Call SetPAWOptions2(ifinput,ifen,Grid0, Orbit,Pot,success)
+         Call SetPAWOptions2(ifinput,ifen,Grid0, Orbit,Pot_FC,success)
 
       OPEN(UNIT=12,FILE='ATOM_WAE',STATUS='UNKNOWN',IOSTAT=IERR)
       OPEN(UNIT=17,FILE='ATOM_WPS',STATUS='UNKNOWN',IOSTAT=IERR)
@@ -220,18 +241,26 @@
           WRITE(IU13,*)
          ENDDO
 !
-      ALLOCATE(RHOV(Grid0%n))
-      RHOV = 0
-      DO io =1, PAW%nbase
-!         WRITE(6,*) 'OCC2=', Orbit%occ(io)
-         if (mod(io,2) .ne. 0) RHOV(:) = RHOV(:)+PAW%phi(:,io)**2*Orbit%occ(io)
-      ENDDO
-      OPEN(UNIT=16,FILE='ATOM_VAL',STATUS='UNKNOWN',IOSTAT=IERR)
-      IF (IERR/=0) THEN
-         OPEN(UNIT=16,FILE='ATOM_VAL',STATUS='OLD')
-      ENDIF
-          DO j=1,PAW%irc 
-             WRITE(IU12,*) Grid0%r(j)*AUTOA, RHOV(j), FC%valeden(j)
+!      ALLOCATE(RHOV(Grid0%n))
+!      RHOV = 0
+!      DO io =1, PAW%nbase
+!!         WRITE(6,*) 'OCC2=', Orbit%occ(io)
+!         if (mod(io,2) .ne. 0) RHOV(:) = RHOV(:)+PAW%phi(:,io)**2*Orbit%occ(io)
+!      ENDDO
+
+         call SetPOTPS(Grid0, PotAEr, PotPS)
+
+         call SetPOT(Grid0, FC%coreden, FC%valeden, PotHr, PotXCr)
+         OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
+         OPEN(UNIT=24,FILE='ATOM_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
+         IF (IERR/=0) THEN
+             OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='OLD')
+             OPEN(UNIT=24,FILE='ATOM_POTPSC',STATUS='OLD')
+         ENDIF
+          DO j=1, Grid0%n
+             PotPSC(j) = PotPS(j)-PotAEr_00(j)/Grid0%r(j)
+             WRITE(IU18,*) Grid0%r(j)*AUTOA, PotPS(j)*FELECT*SCALE/2.0*AUTOA
+             WRITE(IU20,*) Grid0%r(j)*AUTOA, PotPS(j)*FELECT*SCALE/2.0*AUTOA, PotAEr_00(j)/Grid0%r(j)*FELECT*SCALE/2.0*AUTOA
           ENDDO
 
          Call Report_Pseudobasis(Grid0,PAW,ifen)
@@ -260,27 +289,28 @@
 ! 
         END SUBROUTINE vasp_pseudo
 
-        SUBROUTINE SetPOTAE(Grid2, coreden, valeden, POT)
+        SUBROUTINE SetPOT(Grid2, coreden, valeden, POTHR, POTXCR)
          USE atomdata
          USE aeatom
          USE atomdata
         TYPE(GridInfo) :: Grid2
-        TYPE(PotentialInfo) :: POT
         INTEGER :: N
-        REAL(8), INTENT(IN) :: coreden(:)
-        REAL(8), INTENT(IN) :: valeden(:)
-        REAL(8), ALLOCATABLE :: density(:), Vrxc_tmp(:)
-        REAL(8) qc, ecoul, v0, etxc, eex, SCALE
+        REAL(q), INTENT(IN) :: coreden(:)
+        REAL(q), INTENT(IN) :: valeden(:)
+        REAL(q) :: density(Grid2%n)
+        REAL(q) :: POTXCR(Grid2%n), POTHR(Grid2%n)
+        REAL(q) qc, ecoul, v0, etxc, eex, SCALE
 
         SCALE = 2.0*sqrt(PI0)
 
 !        N= Grid2%n
-        call InitPot(POT, Grid2%n)
+!        call InitPot(POT, Grid2%n)
 
-        call Get_Nuclearpotential(Grid2, AEPot)
-!        WRITE(6,*) 'RVN=', AEPot%rvn(Grid2%n)
+!        call Get_Nuclearpotential(Grid2, Pot_AE)
+!        WRITE(6,*) 'RVN=', Pot_AE%rvn(Grid2%n)
 
-        allocate (density(Grid2%n), Vrxc_tmp(Grid2%n))
+!        allocate (density(Grid2%n), Vrxc_tmp(Grid2%n))
+!        allocate (POTHR(Grid2%n), POTXCR(Grid2%n))
         density = 0.d0
         DO i = 1, Grid2%n 
 !           density(i) = coreden(i)+FCOrbit%den(i)
@@ -291,15 +321,18 @@
 !        Grid2%n=FindGridIndex(Grid, PAW%rc)
 !        WRITE(6,*) 'Grid_N=',Grid2%n
 !        call poisson(Grid2, qc, coreden, POT%rvh, ecoul, v0)
-        call poisson(Grid2, qc, valeden, POT%rvh, ecoul, v0)
+        call poisson(Grid2, qc, valeden, POTHR, ecoul, v0)
 !        call poisson(Grid2, qc, density, POT%rvh, ecoul, v0)
 !        DO i = 1, Grid2%n 
 !           density(i) = coreden(i)+FCOrbit%den(i)
 !           WRITE(25,*) Grid2%r(Grid2%n), qc, POT%rvh(Grid2%n)
+!            POTHR(i) = POTHR(i)*FELECT*SCALE/2.0*AUTOA
 !        ENDDO
 
-        call exch(Grid2, density, POT%rvx, etxc,eex)
-
+        call exch(Grid2, density, POTXCR, etxc,eex)
+!        DO i = 1, Grid2%n 
+!            POTXCR(i) = POTXCR(i)*FELECT*SCALE/2.0*AUTOA
+!        ENDDO
 !        Grid2%n = N
 
 
@@ -314,10 +347,59 @@
 !        ENDDO
 
 !         POT%rv=(POT%rvh+POT%rvx)*SCALE
-         POT%rv=AEPot%rvn/FELECT+(POT%rvh+POT%rvx)*FELECT*SCALE/2.0*AUTOA
+!         POT%rv=(POT%rvh+POT%rvx)*FELECT*SCALE/2.0*AUTOA
 
-        deallocate(density, Vrxc_tmp)
-        END SUBROUTINE SetPOTAE
+!        deallocate(density, Vrxc_tmp)
+!        deallocate(POTHR, POTXCR)
+        END SUBROUTINE SetPOT
+
+
+        SUBROUTINE SetPOTPS(Grid2, POTAE, POTPS)
+         TYPE(GridInfo) :: Grid2
+         REAL(q) :: PotPS(Grid2%n), PotAE(Grid2%n), PotAEr(Grid2%n)
+         REAL(q) :: ql(2), qr, rc, xx(2), bb(2), alpha, beta
+         REAL(q) :: g, gp, gpp, gg
+         REAL(q) :: jbes, jbesp, jbespp, amat(2,2), al(2)
+         INTEGER :: irc, i
+
+      irc=PAW%irc_vloc
+      rc=PAW%rc_vloc
+
+      PotAEr=-POTAE
+      alpha=1-rc*Gfirstderiv(Grid2,irc,PotAEr)/PotAEr(irc)
+      beta=1.0d0
+      call solvbes(xx,alpha,beta,0,2)
+      ql(1:2)=xx(1:2)/rc
+
+      DO i=1,2
+        qr=ql(i)*rc
+        call jbessel(jbes,jbesp,jbespp, 0, 2, qr)
+        jbespp=2.d0*ql(i)*jbesp+jbespp*ql(i)*ql(i)*rc
+        jbesp=jbes+jbesp*ql(i)*rc
+        jbes=jbes*rc
+        amat(1,i)=jbes
+        amat(2,i)=jbespp
+      ENDDO
+
+      bb(1)=PotAEr(irc)
+      bb(2)=Gsecondderiv(Grid2, irc,PotAEr)
+
+      det=amat(1,1)*amat(2,2)-amat(1,2)*amat(2,1)
+      al(1)=(amat(2,2)*bb(1)-amat(1,2)*bb(2))/det
+      al(2)=(amat(1,1)*bb(2)-amat(2,1)*bb(1))/det
+
+      PotPS=PotAEr/Grid%r
+
+        do i=1,irc-1
+           qr=ql(1)*Grid2%r(i)
+           call jbessel(g,gp,gpp,0,2,qr)
+           PotPS(i)=al(1)*g!/Grid2%r(i)
+           qr=ql(2)*Grid2%r(i)
+           call jbessel(g,gp,gpp,0,2,qr)
+           PotPS(i)=PotPS(i)+al(2)*g
+        enddo
+
+        END SUBROUTINE SetPOTPS
 
 !*********************** SUBROUTINE POT *********************************      
 ! Setup the onsite potential V (on a radial grid)
@@ -425,8 +507,8 @@
          DHARTREE=DHARTREE+SUM
       ENDDO
       ENDDO
-      WRITE(6,*) 'DHARTREE=', DHARTREE
-      WRITE(6,*) 'V=', V(:,1,1)
+!      WRITE(6,*) 'DHARTREE=', DHARTREE
+!      WRITE(6,*) 'V=', V(:,1,1)
 
 !#ifdef testout
 !      ! integrate charge
