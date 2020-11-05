@@ -100,15 +100,17 @@ def Data_compare_Fig(Properties, data, name):
     Fig_name = name+".eps"
 
     gp.c(Fig_title)
-    gp.c('set xrange[0:1.5]')
+    gp.c('set xrange[0:1.7]')
     if (Properties == "wavefunction"):
        gp.c('set yrange[-1:1.5]')
     elif (Properties == "density" and data == "PCORE"):
        gp.c('set yrange[0:1]')
     elif (Properties == "density" and data == "CORE"):
        gp.c('set yrange[0:9]')
+    elif (Properties == "potential" and data == "POTAE"):
+       gp.c('set yrange[-250: 20]')
     elif (Properties == "potential" and data == "POTPS"):
-       gp.c('set yrange[-30:-20]')
+       gp.c('set yrange[-50:-20]')
     elif (Properties == "potential" and data == "POTPSC"):
        gp.c('set yrange[-180:-20]')
     else:
@@ -128,12 +130,12 @@ def main():
 #    time.sleep(5)
 
 #    Data_Fig("potential", "VASP", "POTAE", "POTAE_data")
-#    Data_compare_Fig("wavefunction", "WAE", "WAE_data")
-#    Data_compare_Fig("wavefunction", "WPS", "WPS_data")
-#    Data_compare_Fig("density", "CORE", "CORE_data")
-#    Data_compare_Fig("density", "PCORE", "PCORE_data")
-#    Data_compare_Fig("potential", "POTAE", "POTAE_data")
-#    Data_compare_Fig("potential", "POTPS", "POTPS_data")
+    Data_compare_Fig("wavefunction", "WAE", "WAE_data")
+    Data_compare_Fig("wavefunction", "WPS", "WPS_data")
+    Data_compare_Fig("density", "CORE", "CORE_data")
+    Data_compare_Fig("density", "PCORE", "PCORE_data")
+    Data_compare_Fig("potential", "POTAE", "POTAE_data")
+    Data_compare_Fig("potential", "POTPS", "POTPS_data")
     Data_compare_Fig("potential", "POTPSC", "POTPSC_data")
 
 if __name__ == '__main__':
