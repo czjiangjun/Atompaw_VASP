@@ -130,12 +130,12 @@ def main():
 #    time.sleep(5)
 
 #    Data_Fig("potential", "VASP", "POTAE", "POTAE_data")
-    Data_compare_Fig("wavefunction", "WAE", "WAE_data")
-    Data_compare_Fig("wavefunction", "WPS", "WPS_data")
-    Data_compare_Fig("density", "CORE", "CORE_data")
-    Data_compare_Fig("density", "PCORE", "PCORE_data")
-    Data_compare_Fig("potential", "POTAE", "POTAE_data")
-    Data_compare_Fig("potential", "POTPS", "POTPS_data")
+#    Data_compare_Fig("wavefunction", "WAE", "WAE_data")
+#    Data_compare_Fig("wavefunction", "WPS", "WPS_data")
+#    Data_compare_Fig("density", "CORE", "CORE_data")
+#    Data_compare_Fig("density", "PCORE", "PCORE_data")
+#    Data_compare_Fig("potential", "POTAE", "POTAE_data")
+#    Data_compare_Fig("potential", "POTPS", "POTPS_data")
     Data_compare_Fig("potential", "POTPSC", "POTPSC_data")
 
 if __name__ == '__main__':

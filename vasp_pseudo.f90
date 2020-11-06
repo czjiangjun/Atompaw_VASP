@@ -29,7 +29,7 @@
          TYPE(PotentialInfo), INTENT(IN) :: Pot_AE
          TYPE(PotentialInfo), INTENT(IN) :: Pot_FC
          REAL(q), ALLOCATABLE :: PotHr(:), PotXCr(:), PotAEr(:), PotAEr_00(:)
-         REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:)
+         REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
          REAL(q), ALLOCATABLE :: pdensity(:), d(:)
          INTEGER :: nbase, N
          REAL(q) :: Q_00 ,tq
@@ -48,7 +48,7 @@
          REAL(q), ALLOCATABLE :: CRHODE(:,:)
          REAL(q), ALLOCATABLE :: RHOLM(:)
          CHARACTER(LEN=2) :: TYPE(1)
-         LOGICAL ::   LPAW,  success
+         LOGICAL ::   LPAW,  success, UNSCREN
 
          ALLOCATE (P(1))
          NTYP = 1
@@ -253,8 +253,9 @@
           WRITE(IU13,*)
          ENDDO
 
-      ALLOCATE(RHOV(Grid0%n), d(Grid0%n))
-      RHOV = 0
+
+!      ALLOCATE(RHOV(Grid0%n), d(Grid0%n))
+!      RHOV = 0
 !      DO io =1, PAW%nbase
 !         WRITE(6,*) 'OCC2=', Orbit%occ(io)
 !         if (mod(io,2) .ne. 0) RHOV(:) = RHOV(:)+PAW%tphi(:,io)**2*Orbit%occ(io)
@@ -270,7 +271,7 @@
         CALL FindVlocfromVeff(Grid,FCOrbit,PAW)
 
          
-         nbase=PAW%nbase
+!         nbase=PAW%nbase
 !
 !!         N=FindGridIndex(Grid0, PAW%rc_shap)
 !!         PAW%irc= N
@@ -280,42 +281,61 @@
 !      tq=integrator(Grid,d,1,irc)
 !      write(6,*) ' abinit tq = ', tq
 
-         Q_00= 0.d0
-         do ib=1,nbase
-            do ic=1,nbase
-               Q_00=Q_00+PAW%wij(ib,ic)*PAW%oij(ib,ic)
-            enddo
-         enddo
+!         Q_00= 0.d0
+!         do ib=1,nbase
+!            do ic=1,nbase
+!               Q_00=Q_00+PAW%wij(ib,ic)*PAW%oij(ib,ic)
+!            enddo
+!         enddo
 !         write(6,*) 'TEST: Complete q00 ', Q_00
 !
-         ALLOCATE(pdensity(Grid0%n))
-         pdensity = 0.d0
 !
 !!         PAW%rc_shape
 !!         N=FindGridIndex(Grid0, PAW%rc_shape)
 !!         integrator(Grid,FC%valeden)
 !         DO i =1, Grid0%n
-!            pdensity(i) = RHOV(i)-PAW%hatshape(i)*Q_00 
+!            pdensity(i) = PAW%hatshape(i)*Q_00
 !            pdensity(i) = FC%valeden(i)+FC%coreden(i) 
 !         ENDDO
 
-         call SetPOT(Grid0,FC%coreden, FC%valeden, PotHr, PotXCr, .TRUE.)
+         ALLOCATE(pdensity(Grid0%n), PotPSCr(Grid0%n))
+         pdensity = 0.d0
+         PotPSCr = 0.d0
+         UNSCREN = .TRUE.
 
-         WRITE(6,*) 'unscreened POT calcualted'
+!         WRITE(25, *) PAW%hatden
+         IF (UNSCREN) THEN
+            WRITE(6,*) 'unscreened POTPS calcualted'
+            pdensity =  PAW%tden+SCALE*PAW%hatden
+            call SetPOT(Grid0,PAW%tcore, pdensity , PotHr, PotXCr, .FALSE.)
+!   ---------------- Method 1 ----------------------
+           DO j =1, Grid0%n
+              PotPSC(j)= -(PotPS(j)+(PotHr(j)+PotXCr(j))/Grid0%r(j))
+           ENDDO
+!   ---------------- Method 2 ----------------------
+!            DO j =1, Grid0%n
+!               PotPSCr(j)= PotPS(j)*Grid0%r(j)+(PotHr(j)+PotXCr(j))
+!!             WRITE(6,*) Grid0%r(j)*AUTOA, POTPSC(j)*FELECT*SCALE/2.0*AUTOA
+!            ENDDO
+!            call SetPOTPS(Grid0, PotPSCr, PotPSC)
+         ELSE
+            WRITE(6,*) 'unscreened POTAE calcualted'
+            call SetPOT(Grid0,FC%coreden, FC%valeden, PotHr, PotXCr, .TRUE.)
+
+            DO j =1, Grid0%n
+               PotAE00(j)= Pot_AE%rvn(j)*2/AUTOA/FELECT**2/SCALE+PotHr(j)+PotXCr(j)
+!              WRITE(6,*) PotAE00(j)
+            ENDDO
+
+            call SetPOT(Grid0,pdensity, FC%valeden, PotHr, PotXCr, .TRUE.)
+!           DO j =1, Grid0%n
+!              PotPSC(j)= PotAE(j)+(PotHr(j)+PotXCr(j))*FELECT*SCALE/2.0*AUTOA/Grid0%r(j)
+!              WRITE(6,*) PotAE00(j)-(PotHr(j)+PotXCr(j)) 
+!           ENDDO
 !
-         DO j =1, Grid0%n
-             PotAE00(j)= Pot_AE%rvn(j)*2/AUTOA/FELECT**2/SCALE+PotHr(j)+PotXCr(j)
-             WRITE(6,*) PotAE00(j)
-         ENDDO
-
-         call SetPOT(Grid0,pdensity, FC%valeden, PotHr, PotXCr, .TRUE.)
-         DO j =1, Grid0%n
-!             PotPSC(j)= PotAE(j)+(PotHr(j)+PotXCr(j))*FELECT*SCALE/2.0*AUTOA/Grid0%r(j)
-             WRITE(6,*) PotAE00(j)-(PotHr(j)+PotXCr(j)) 
-         ENDDO
-
-         call SetPOTPS(Grid0, PotAE00-PotHr-PotXCr, PotPSC)
-
+            PotPSCr = PotAE00-PotHr-PotXCr
+            call SetPOTPS(Grid0, PotPSCr, PotPSC)
+         ENDIF
          OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
          OPEN(UNIT=24,FILE='ATOM_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
          IF (IERR/=0) THEN
@@ -325,7 +345,7 @@
           DO j=1, Grid0%n
 !             PotPSC(j) = PotPS(j)-PotPSC(j)/Grid0%r(j)
              WRITE(IU18,*) Grid0%r(j)*AUTOA, PotPS(j)*FELECT*SCALE/2.0*AUTOA
-             WRITE(IU20,*) Grid0%r(j)*AUTOA, PotPSC(j)*FELECT*SCALE/2.0*AUTOA/2.25
+             WRITE(IU20,*) Grid0%r(j)*AUTOA, PotPSC(j)*FELECT*SCALE/2.0*AUTOA
           ENDDO
 
         CALL Report_Pseudopotential(Grid,PAW)
@@ -335,7 +355,7 @@
 !        deallocate(coreden)
       DEALLOCATE(RHO, V, RHOAE00, CRHODE, RHOLM)
       DEALLOCATE(PotHr, PotXCr, PotAEr,PotAEr_00, PotPS, PotAE, PotAE00,  PotPSC)
-      DEALLOCATE(pdensity)
+      DEALLOCATE(pdensity, PotPSCr)
         CLOSE(IU6)
         CLOSE(IU8)
         CLOSE(IU9)
@@ -437,6 +457,8 @@
       irc=PAW%irc_vloc
       rc=PAW%rc_vloc
 
+      PotAEr = 0.d0
+      POTPS = 0.d0
       PotAEr=-POTAE
       alpha=1-rc*Gfirstderiv(Grid2,irc,PotAEr)/PotAEr(irc)
       beta=1.0d0
