@@ -133,15 +133,15 @@
       RHO = 0
 !
 !
-!!!!!!!!!!!!!    RELATION BETWEEN PP%WAE and RHO:   \int PP%WAE**2 dR = \int RHO*SCALE dR   !!!!!!
-!
-      DO io =1,CHANNELS
-         LI = PP%LPS(io)
+!!!!!!!!!!!!!    RELATION BETWEEN PP%WAE and RHO_V:   \int PP%WAE**2 dR = \int RHO_V*SCALE dR   !!!!!!
+!TEST FOR \int PP%WAE**2 dR
+!      DO io =1,CHANNELS
+!         LI = PP%LPS(io)
 !         WRITE(6,*) 'OCC1=', PP%QATO(io,io)
-         RHOAE00(:) = RHOAE00(:)+PP%WAE(:,io)**2*PP%QATO(io,io)*(2*LI+1)
-      ENDDO
-      CALL SIMPI(PP%R,RHOAE00, QTEST)
-      WRITE(6,*) 'QTEST=', QTEST
+!         RHOAE00(:) = RHOAE00(:)+PP%WAE(:,io)**2*PP%QATO(io,io)*(2*LI+1)
+!      ENDDO
+!      CALL SIMPI(PP%R,RHOAE00, QTEST)
+!      WRITE(6,*) 'QTEST=', QTEST
 !
       LMAX_TABLE=6; CALL YLM3ST_(LMAX_TABLE)
       CALL SET_CRHODE_ATOM(CRHODE,PP)
@@ -152,30 +152,37 @@
       IF (IERR/=0) THEN
          OPEN(UNIT=25,FILE='VASP_VAL',STATUS='OLD')
       ENDIF
-          DO j=1, PP%R%NMAX
-             WRITE(25,*) PP%R%R(j), RHOAE00(j), RHO(j,1,1)*SCALE
-          ENDDO
+!TEST FOR \int PP%RHO_V*SCALE dR
+!         DO j=1, PP%R%NMAX
+!             WRITE(25,*) PP%R%R(j), RHOAE00(j), RHO(j,1,1)*SCALE
+!          ENDDO
 
-      RHOAE00(:) = RHO(:,1,1)
+!      RHOAE00(:) = RHO(:,1,1)
+!      CALL SIMPI(PP%R,RHOAE00, QTEST)
+!      WRITE(6,*) 'QTEST=', QTEST*SCALE
+!      WRITE(6,*) 'QTEST=', QTEST
+!      STOP
+!!!!!!!!! RHO(:) = RHOAE(:) + RHO_V(:) !!!!!!!!!
 !      RHO(:,1,1)=RHOAE00(:)+PP%RHOAE(:)
 
 !      Z=INT(PP%ZVAL_ORIG+PP%ZCORE)
 !      CALL POT(RHO, Z, PP%R, V)
 !      RHO(:,1,1)=RHOAE00(:)
 
-      CALL SIMPI(PP%R,RHOAE00, QTEST)
-      WRITE(6,*) 'QTEST=', QTEST*SCALE
-      WRITE(6,*) 'QTEST=', QTEST
-      STOP
 
       V=0
-!      POT-AE = 0
+      POTAE = 0
       CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
-!      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-!       RHO, PP%RHOAE, POT-AE, V1, DOUBLEAE, EXCG)
-!      CALL VASP_POT(RHO, 0, PP%R, V2, PP%RHOAE)
-      CALL VASP_POT(RHO, 0, PP%R, V, PP%RHOAE)
+      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
+       RHO, PP%RHOAE, POTAE, POT, DOUBLEAE, EXCG)
 
+      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
+       RHO, PP%RHOAE, POTAE, POT, DOUBLEAE, EXCG)
+
+!      CALL VASP_POT(RHO, 0, PP%R, V2, PP%RHOAE)
+!      CALL VASP_POT(RHO, 0, PP%R, V, PP%RHOAE)
+
+        STOP
       OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='OLD')
