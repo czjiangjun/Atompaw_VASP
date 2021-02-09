@@ -42,9 +42,9 @@
          INTEGER :: NTYP, NTYPD, LDIM, LDIM2, LMDIM,CHANNELS, LMAX, LMMAX, LI
          INTEGER :: LMAX_TABLE
          REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
-         REAL(q) :: QTEST,SCALE, DOUBLEAE, EXCG
-         REAL(q), ALLOCATABLE :: RHO(:,:,:), V(:,:,:), RHOAE00(:), RHOV(:)
-         REAL(q), ALLOCATABLE :: RHOPS00(:)
+         REAL(q) :: DHARTREE, QTEST,SCALE, DOUBLEAE, EXCG
+         REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOV(:)
+         REAL(q), ALLOCATABLE :: RHOPS00(:), POTAEC(:)
          REAL(q), ALLOCATABLE :: CRHODE(:,:)
          REAL(q), ALLOCATABLE :: RHOLM(:)
          CHARACTER(LEN=2) :: TYPE(1)
@@ -125,6 +125,7 @@
 
       LMMAX = (PP%LMAX+1)**2
       ALLOCATE(RHO(PP%R%NMAX, LMMAX,1), V(PP%R%NMAX, LMMAX,1), RHOAE00(PP%R%NMAX))
+      ALLOCATE(POT(PP%R%NMAX, LMMAX,1), POTAEC(PP%R%NMAX))
       ALLOCATE(RHOPS00(PP%R%NMAX))
 !      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
       ALLOCATE(CRHODE(LDIM,LDIM))
@@ -170,25 +171,35 @@
 !      RHO(:,1,1)=RHOAE00(:)
 
 
-      V=0
-      POTAE = 0
+!      V=0
+      CALL RAD_POT_HAR(0, PP%R, POTAEC, PP%RHOAE, DHARTEE)
+      DO j=1, PP%R%NMAX
+         POTAEC(j) = POTAEC(j)/SCALE-FELECT/PP%R%R(j)*14.00
+      ENDDO
+
+!      POTAEC = 0
+!      RHO = 0
       CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
       CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-       RHO, PP%RHOAE, POTAE, POT, DOUBLEAE, EXCG)
+       RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
 
-      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-       RHO, PP%RHOAE, POTAE, POT, DOUBLEAE, EXCG)
-
-!      CALL VASP_POT(RHO, 0, PP%R, V2, PP%RHOAE)
-!      CALL VASP_POT(RHO, 0, PP%R, V, PP%RHOAE)
-
-        STOP
       OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='OLD')
       ENDIF
           DO j=1, PP%R%NMAX
-             WRITE(IU15,'(4f20.8)') PP%R%R(j),  PP%POTAE(j), -V(j,1,1)*SCALE+14/PP%R%R(j)*FELECT
+             WRITE(IU15,'(4f20.8)') PP%R%R(j), PP%POTAE(j), POT(j,1,1), POTAEC(j)
+          ENDDO
+        STOP
+!      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
+!       RHO, PP%RHOAE, POTAE, POT, DOUBLEAE, EXCG)
+
+!      CALL VASP_POT(RHO, 0, PP%R, V2, PP%RHOAE)
+!      CALL VASP_POT(RHO, 0, PP%R, V, PP%RHOAE)
+
+          DO j=1, PP%R%NMAX
+!             WRITE(IU15,'(4f20.8)') PP%R%R(j),  PP%POTAE(j), -V(j,1,1)*SCALE+14/PP%R%R(j)*FELECT
+             WRITE(IU15,'(4f20.8)') PP%R%R(j),  PP%POTAE(j), POT(j,1,1)*SCALE
           ENDDO
 
       OPEN(UNIT=21,FILE='VASP_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
