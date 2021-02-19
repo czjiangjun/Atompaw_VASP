@@ -45,7 +45,7 @@
          REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
          REAL(q) :: DHARTREE, QTEST,SCALE, DOUBLEAE, EXCG
          REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOV(:)
-         REAL(q), ALLOCATABLE :: RHOPS00(:), POTAEC(:)
+         REAL(q), ALLOCATABLE :: RHOPS00(:), POTAEC(:), POTAE_TEST(:)
          REAL(q), ALLOCATABLE :: CRHODE(:,:)
          REAL(q), ALLOCATABLE :: RHOLM(:)
          CHARACTER(LEN=2) :: TYPE(1)
@@ -179,6 +179,7 @@ _POTCAR
       LMMAX = (PP%LMAX+1)**2
       ALLOCATE(RHO(PP%R%NMAX, LMMAX,1), V(PP%R%NMAX, LMMAX,1), RHOAE00(PP%R%NMAX))
       ALLOCATE(POT(PP%R%NMAX, LMMAX,1), POTAEC(PP%R%NMAX))
+      ALLOCATE(POTAE_TEST(PP%R%NMAX))
       ALLOCATE(RHOPS00(PP%R%NMAX))
 !      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
       ALLOCATE(CRHODE(LDIM,LDIM))
@@ -225,14 +226,20 @@ _POTCAR
 
 
 !!!!!!!!! POTAE = VH[n_v]+V_XC[n_v+n_c] = POTAEC  !!!!!!!!!     
+      POT = 0
       POTAEC = 0
 !      RHO = 0
       CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
       CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
        RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+      POTAE_TEST(:) = POT(:,1,1)
+
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      CALL POT(RHO,14.00, PP%R,POT)                !
+      POTAEC = 0
+      CALL VASP_POT(RHO,0, PP%R, POT, PP%RHOAE, POTAEC) !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      POTAE_TEST(:) = POT(:,1,1)
 !!!!!!!!! POTAEC = V[n_Zc] !!!!!!!!!
       CALL RAD_POT_HAR(0, PP%R, POTAEC, PP%RHOAE, DHARTEE)
       DO j=1, PP%R%NMAX
