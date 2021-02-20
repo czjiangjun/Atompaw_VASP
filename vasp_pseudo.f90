@@ -3,7 +3,7 @@
          USE base           ! VASP_base
          USE ini            ! VASP_ini/PREC
          USE setexm
-         USE core_rel
+!         USE core_rel
          USE PSEUDO_struct  ! VASP_Pseudo_struct
          USE GlobalMath
          USE atomdata
@@ -31,58 +31,7 @@
          TYPE(PotentialInfo), INTENT(IN) :: Pot_FC
          REAL(q), ALLOCATABLE :: PotHr(:), PotXCr(:), PotAEr(:), PotAEr_00(:)
          REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
-         REAL(q), ALLOCATABLE :: pdensity(:), d(:) ,cpdensity(:)
-         INTEGER :: nbase, N, irc, irc_core, irc_shap
-         REAL(q) :: Q_00 , Q_00c,tq
-         TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
-         TYPE(potcar), POINTER :: PP
-         TYPE(INFO_STRUCT) :: INFO
-!         TYPE(PseudoInfo) :: PAW
-
-         INTEGER :: ifinput,ifen,Z
-         INTEGER :: NTYP, NTYPD, LDIM, LDIM2, LMDIM,CHANNELS, LMAX, LMMAX, LI
-         INTEGER :: LMAX_TABLE
-         REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
-         REAL(q) :: DHARTREE, QTEST,SCALE, DOUBLEAE, EXCG
-         REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOV(:)
-         REAL(q), ALLOCATABLE :: RHOPS00(:), POTAEC(:), POTAE_TEST(:)
-         REAL(q), ALLOCATABLE :: CRHODE(:,:)
-         REAL(q), ALLOCATABLE :: RHOLM(:)
-         CHARACTER(LEN=2) :: TYPE(1)
-         LOGICAL ::   LPAW,  success, UNSCREN
-
-_POTCAR
-         USE pseudo         ! VASP_Pseudo
-         USE base           ! VASP_base
-         USE ini            ! VASP_ini/PREC
-         USE setexm
-         USE PSEUDO_struct  ! VASP_Pseudo_struct
-         USE GlobalMath
-         USE atomdata
-         USE aeatom
-         USE excor_atom
-         USE exx_pseudo
-         USE hf_pseudo
-         USE numerov_mod
-         USE paw_sub
-         USE pseudodata
-         USE pseudo_sub
-         USE radialsr
-         USE pseudo_atom  ! ATOMPAW_Pseudo
-         USE atompaw_report
-!
-     CONTAINS
-      SUBROUTINE vasp_pseudo(ifinput, ifen, Grid0, Orbit, Pot_AE, Pot_FC, success)!(ifinput,ifen,Grid)
-         IMPLICIT COMPLEX(q)   (C)
-         IMPLICIT REAL(q)  (A-B,D-H,O-Z)
-
-         TYPE(GridInfo), INTENT(IN) :: Grid0
-!         REAL(8), INTENT(IN) :: coreden(:)
-         Type(OrbitInfo), INTENT(IN) :: Orbit
-         TYPE(PotentialInfo), INTENT(IN) :: Pot_AE
-         TYPE(PotentialInfo), INTENT(IN) :: Pot_FC
-         REAL(q), ALLOCATABLE :: PotHr(:), PotXCr(:), PotAEr(:), PotAEr_00(:)
-         REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
+         REAL(q), ALLOCATABLE :: POTAE_TEST(:)
          REAL(q), ALLOCATABLE :: pdensity(:), d(:) ,cpdensity(:)
          INTEGER :: nbase, N, irc, irc_core, irc_shap
          REAL(q) :: Q_00 , Q_00c,tq
@@ -225,7 +174,7 @@ _POTCAR
 !      RHO(:,1,1)=RHOAE00(:)
 
 
-!!!!!!!!! POTAE = VH[n_v]+V_XC[n_v+n_c] = POTAEC  !!!!!!!!!     
+!!!!!!!!! POTAE = V_H[n_v]+V_XC[n_v+n_c] != POTAEC  !!!!!!!!!     
       POT = 0
       POTAEC = 0
 !      RHO = 0
@@ -233,17 +182,25 @@ _POTCAR
       CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
        RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
       POTAE_TEST(:) = POT(:,1,1)
+!!!!!!!!!! VASP_POT is THE SAME AS RAD_POT !!!!!!!!!!!!!!!!!!!!!!!!!!!
+!      POTAEC = 0
+!      POT = 0
+!      CALL VASP_POT(RHO,0, PP%R, POT, PP%RHOAE, POTAEC) !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+!!!!!!!!!!!!!!!!!!!!!!!! POTAEC = V_H[n_Zc] = V_H[n_c]+ Z/r !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      POTAEC = 0
-      CALL VASP_POT(RHO,0, PP%R, POT, PP%RHOAE, POTAEC) !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      POTAE_TEST(:) = POT(:,1,1)
-!!!!!!!!! POTAEC = V[n_Zc] !!!!!!!!!
+!!!!!!!!!! POTAEC calected undirected !!!!!!!!!!!!!!!!!!!!
+!      RHO(:,1,1) = RHO(:,1,1)+PP%RHOAE(:) 
+!      POT = 0
+!      CALL VASP_POT(RHO,14, PP%R, POT) !
+!!!!!! V_H[n_Zc] = V_H[n_c+n_v]+Z/r+V_XC[n_c+n_v] - V_H[n_v]-V_XC[n_c+n_v]
+!      POTAEC(:) = POT(:,1,1)-POTAE_TEST(:)
+
+!!!!!!!!! POTAEC calculated Directed !!!!!!!!!
       CALL RAD_POT_HAR(0, PP%R, POTAEC, PP%RHOAE, DHARTEE)
       DO j=1, PP%R%NMAX
-         POTAEC(j) = POTAEC(j)/SCALE-FELECT/PP%R%R(j)*14.00
+         POTAEC(j) = POTAEC(j)-FELECT*SCALE/PP%R%R(j)*14.00
       ENDDO
 
       OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
@@ -251,7 +208,8 @@ _POTCAR
          OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='OLD')
       ENDIF
           DO j=1, PP%R%NMAX
-             WRITE(IU15,'(4f20.8)') PP%R%R(j), PP%POTAE(j), POT(j,1,1), POTAEC(j)
+!             WRITE(IU15,'(4f20.8)') PP%R%R(j), PP%POTAE(j), POT(j,1,1)-POTAE_TEST(j), POTAEC(j)
+             WRITE(IU15,'(4f20.8)') PP%R%R(j), PP%POTAE(j), POT(j,1,1), POTAE_TEST(j)
           ENDDO
         STOP
 !      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
@@ -298,8 +256,7 @@ _POTCAR
       IF (IERR/=0) THEN
          OPEN(UNIT=20,FILE='ATOM_POTAE',STATUS='OLD')
       ENDIF
-          call SetPOT(Grid0, FC%coreden, FC%valeden, PotHr, PotXCr, .F      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-       RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+          call SetPOT(Grid0, FC%coreden, FC%valeden, PotHr, PotXCr, .FALSE.)
 
 !!!!!!!!! POTAEC = V[n_Zc] !!!!!!!!!
       CALL RAD_POT_HAR(0, PP%R, POTAEC, PP%RHOAE, DHARTEE)
