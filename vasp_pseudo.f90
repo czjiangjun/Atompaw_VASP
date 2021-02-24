@@ -29,7 +29,7 @@
          Type(OrbitInfo), INTENT(IN) :: Orbit
          TYPE(PotentialInfo), INTENT(IN) :: Pot_AE
          TYPE(PotentialInfo), INTENT(IN) :: Pot_FC
-         REAL(q), ALLOCATABLE :: PotHr(:), PotXCr(:), PotAEr(:), PotAEr_00(:)
+         REAL(q), ALLOCATABLE :: PotHr(:), PotXCr(:), PotAEr(:), PotAECr(:)
          REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
          REAL(q), ALLOCATABLE :: POTAE_TEST(:)
          REAL(q), ALLOCATABLE :: pdensity(:), d(:) ,cpdensity(:)
@@ -253,7 +253,7 @@
 
 
 !!        WRITE(6,*) 'N=', Grid0%n
-      ALLOCATE(PotHr(Grid0%n), PotXCr(Grid0%n), PotAEr(Grid0%n), PotAEr_00(Grid0%n))
+      ALLOCATE(PotHr(Grid0%n), PotXCr(Grid0%n), PotAEr(Grid0%n), PotAECr(Grid0%n))
       ALLOCATE(PotAE00(Grid0%n), PotPS(Grid0%n))
       ALLOCATE(PotAE(Grid0%n), PotPSC(Grid0%n))
 
@@ -269,11 +269,16 @@
 !!!!!!!!! POT_EFF = V_H[n_v+n_Zc]+V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!     
           call SetPOT(Grid0, FC%coreden, FC%valeden, PotHr, PotXCr, .TRUE.)
           DO j=1,Grid0%n 
-!             PotAEr_00(j) = PotHr(j)+PotXCr(j)!+Pot_AE%rvn(j)*2*AUTOA/FELECT**2/SCALE
              PotAEr(j) = PotHr(j)+PotXCr(j)+Pot_AE%rvn(j)
 
-!             WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAEr_00(j)/Grid0%r(j)*SCALE*RYTOEV    !!  POTAE
              WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAEr(j)/Grid0%r(j)*SCALE*RYTOEV    !!  POT_EFF
+          ENDDO
+
+!!!!!!!!! POTAEC = V_H[n_c]+V_Z !!!!!!!!!!!!!!!!!     
+          FC%valeden = 0.0
+          call SetPOT(Grid0, FC%valeden, FC%coreden, PotHr, PotXCr, .FALSE.)
+          DO j=1,Grid0%n 
+             PotAECr(j) = PotHr(j)+Pot_AE%rvn(j)
           ENDDO
 
          Call setcoretail2(Grid0, FC%coreden)
@@ -417,14 +422,14 @@
 !   ---------------- Method 1 ----------------------
            DO j =1, Grid0%n
               PotPSC(j)= PotPS(j)-(PotHr(j)+PotXCr(j))/Grid0%r(j)
-              WRITE(26,*) Grid0%r(j)*AUTOA, PotPSC(j)*RYTOEV*SCALE
+              WRITE(26,*) Grid0%r(j)*AUTOA, PotPSC(j)*SCALE*RYTOEV
            ENDDO
 !   ---------------- Method 2 ----------------------
 !            DO j =1, Grid0%n
 !               PotPSCr(j)= PotPS(j)*Grid0%r(j)+(PotHr(j)+PotXCr(j))
 !!             WRITE(6,*) Grid0%r(j)*AUTOA, POTPSC(j)*FELECT*SCALE/2.0*AUTOA
 !            ENDDO
-!            call SetPOTPS(Grid0, PotPSCr, PotPSC)
+            call SetPOTPS(Grid0, PotAECr, PotPSC)
          OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
          OPEN(UNIT=24,FILE='ATOM_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
          IF (IERR/=0) THEN
@@ -435,7 +440,7 @@
 !             PotPSC(j) = PotPS(j)-PotPSC(j)/Grid0%r(j)
              WRITE(IU18,*) Grid0%r(j)*AUTOA, PotPS(j)*RYTOEV*SCALE
 !             WRITE(IU20,*) Grid0%r(j)*AUTOA, PotPSC(j)*FELECT*SCALE/2.0*AUTOA
-             WRITE(IU20,*) Grid0%r(j)*AUTOA, PotPSC(j)*RYTOEV*SCALE
+             WRITE(IU20,*) Grid0%r(j)*AUTOA, PotPSC(j)*RYTOEV!*SCALE
           ENDDO
 
         STOP
@@ -445,7 +450,7 @@
 
 !        deallocate(coreden)
       DEALLOCATE(RHO, V, RHOAE00, CRHODE, RHOLM)
-      DEALLOCATE(PotHr, PotXCr, PotAEr,PotAEr_00, PotPS, PotAE, PotAE00,  PotPSC)
+      DEALLOCATE(PotHr, PotXCr, PotAEr,PotAECr, PotPS, PotAE, PotAE00,  PotPSC)
       DEALLOCATE(pdensity, PotPSCr)
         CLOSE(IU6)
         CLOSE(IU8)
@@ -550,7 +555,7 @@
 
       PotAEr = 0.d0
       POTPS = 0.d0
-      PotAEr=-POTAE
+      PotAEr= POTAE
       alpha=1-rc*Gfirstderiv(Grid2,irc,PotAEr)/PotAEr(irc)
       beta=1.0d0
       call solvbes(xx,alpha,beta,0,2)
