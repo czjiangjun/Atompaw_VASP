@@ -203,40 +203,45 @@
          POTAEC(j) = POTAEC(j)-FELECT*SCALE/PP%R%R(j)*14.00
       ENDDO
 
+!!!!!!!!!!!!!!!!!!!!!!!! POT_EFF = V_H[n_v+n_Zc] +V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!
+!      POTAE_TEST = 0
+!      POT = 0
+!      POTAEC(:) = POTAEC(:)/SCALE
+!      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
+!       RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+!      POTAE_TEST(:) =  POT(:,1,1)
+
+      RHO(:,1,1) = RHO(:,1,1)+PP%RHOAE(:) 
+      POT = 0
+      CALL VASP_POT(RHO,14, PP%R, POT) !
+
+!      CALL VASP_POT(RHO, 0, PP%R, V2, PP%RHOAE)
+!      CALL VASP_POT(RHO, 0, PP%R, V, PP%RHOAE)
+
       OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='OLD')
       ENDIF
+
           DO j=1, PP%R%NMAX
 !             WRITE(IU15,'(4f20.8)') PP%R%R(j), PP%POTAE(j), POT(j,1,1)-POTAE_TEST(j), POTAEC(j)
-             WRITE(IU15,'(4f20.8)') PP%R%R(j), PP%POTAE(j), POT(j,1,1), POTAE_TEST(j)
+!             WRITE(IU15,'(4f20.8)') PP%R%R(j), PP%POTAE(j) !,  POTAE_TEST(j)
+             WRITE(IU15,'(4f20.8)') PP%R%R(j), POT(j,1,1) !,POTAE_TEST(j)
           ENDDO
-        STOP
-!      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-!       RHO, PP%RHOAE, POTAE, POT, DOUBLEAE, EXCG)
 
-!      CALL VASP_POT(RHO, 0, PP%R, V2, PP%RHOAE)
-!      CALL VASP_POT(RHO, 0, PP%R, V, PP%RHOAE)
-
-          DO j=1, PP%R%NMAX
-!             WRITE(IU15,'(4f20.8)') PP%R%R(j),  PP%POTAE(j), -V(j,1,1)*SCALE+14/PP%R%R(j)*FELECT
-             WRITE(IU15,'(4f20.8)') PP%R%R(j),  PP%POTAE(j), POT(j,1,1)*SCALE
-          ENDDO
+!!!!!!!!!!!!! POTPS = V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c] !!!!!!!!!!!!!!!!!!!!!!!!
+!      CALL RAD_CHARGE(RHO(:,:,1), PP%R, RHOLM(:),PP%LMAX, PP%LPS, PP%WPS)
+!      POT=0
+!      CALL VASP_POT(RHO, 0, PP%R, POT, PP%RHOPS)
 
       OPEN(UNIT=21,FILE='VASP_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=21,FILE='VASP_POTPS',STATUS='OLD')
       ENDIF
           DO j=1, PP%R%NMAX
-             WRITE(IU17,'(4f20.8)') PP%R%R(j),  PP%POTPS(j)
+             WRITE(IU17,'(4f20.8)') PP%R%R(j),  PP%POTPS(j)     !,POT(j,1,1)/SCALE 
           ENDDO
 
-      CALL RAD_CHARGE(RHO(:,:,1), PP%R, RHOLM(:),PP%LMAX, PP%LPS, PP%WPS)
-      V=0
-      CALL VASP_POT(RHO, 0, PP%R, V, PP%RHOPS)
-          DO j=1, PP%R%NMAX
-             WRITE(25,'(4f20.8)') PP%R%R(j),  V(j,1,1)/SCALE, PP%POTPS(j)-PP%POTPSC(j)
-          ENDDO
 
       OPEN(UNIT=23,FILE='VASP_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
@@ -256,74 +261,19 @@
       IF (IERR/=0) THEN
          OPEN(UNIT=20,FILE='ATOM_POTAE',STATUS='OLD')
       ENDIF
-          call SetPOT(Grid0, FC%coreden, FC%valeden, PotHr, PotXCr, .FALSE.)
-
-!!!!!!!!! POTAEC = V[n_Zc] !!!!!!!!!
-      CALL RAD_POT_HAR(0, PP%R, POTAEC, PP%RHOAE, DHARTEE)
-      DO j=1, PP%R%NMAX
-         POTAEC(j) = POTAEC(j)/SCALE-FELECT/PP%R%R(j)*14.00
-      ENDDO
-
-      OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
-      IF (IERR/=0) THEN
-         OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='OLD')
-      ENDIF
-          DO j=1, PP%R%NMAX
-             WRITE(IU15,'(4f20.8)') PP%R%R(j), PP%POTAE(j), POT(j,1,1), POTAEC(j)
-          ENDDO
-        STOP
-!      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-!       RHO, PP%RHOAE, POTAE, POT, DOUBLEAE, EXCG)
-
-!      CALL VASP_POT(RHO, 0, PP%R, V2, PP%RHOAE)
-!      CALL VASP_POT(RHO, 0, PP%R, V, PP%RHOAE)
-
-          DO j=1, PP%R%NMAX
-!             WRITE(IU15,'(4f20.8)') PP%R%R(j),  PP%POTAE(j), -V(j,1,1)*SCALE+14/PP%R%R(j)*FELECT
-             WRITE(IU15,'(4f20.8)') PP%R%R(j),  PP%POTAE(j), POT(j,1,1)*SCALE
-          ENDDO
-
-      OPEN(UNIT=21,FILE='VASP_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
-      IF (IERR/=0) THEN
-         OPEN(UNIT=21,FILE='VASP_POTPS',STATUS='OLD')
-      ENDIF
-          DO j=1, PP%R%NMAX
-             WRITE(IU17,'(4f20.8)') PP%R%R(j),  PP%POTPS(j)
-          ENDDO
-
-      CALL RAD_CHARGE(RHO(:,:,1), PP%R, RHOLM(:),PP%LMAX, PP%LPS, PP%WPS)
-      V=0
-      CALL VASP_POT(RHO, 0, PP%R, V, PP%RHOPS)
-          DO j=1, PP%R%NMAX
-             WRITE(25,'(4f20.8)') PP%R%R(j),  V(j,1,1)/SCALE, PP%POTPS(j)-PP%POTPSC(j)
-          ENDDO
-
-      OPEN(UNIT=23,FILE='VASP_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
-      IF (IERR/=0) THEN
-         OPEN(UNIT=23,FILE='VASP_POTPSC',STATUS='OLD')
-      ENDIF
-          DO j=1, PP%R%NMAX
-             WRITE(IU19,'(4f20.8)') PP%R%R(j),  PP%POTPSC(j)
-          ENDDO
-
-
-!!        WRITE(6,*) 'N=', Grid0%n
-      ALLOCATE(PotHr(Grid0%n), PotXCr(Grid0%n), PotAEr(Grid0%n), PotAEr_00(Grid0%n))
-      ALLOCATE(PotAE00(Grid0%n), PotPS(Grid0%n))
-      ALLOCATE(PotAE(Grid0%n), PotPSC(Grid0%n))
-
-      OPEN(UNIT=20,FILE='ATOM_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
-      IF (IERR/=0) THEN
-         OPEN(UNIT=20,FILE='ATOM_POTAE',STATUS='OLD')
-      ENDIF
-          call SetPOT(Grid0, FC%coreden, FC%valeden, PotHr, PotXCr, .FALSE.)
           WRITE(6,*) 'AEPOT calcualted'
-          DO j=1,Grid0%n 
-             PotAEr_00(j) = PotHr(j)+PotXCr(j)!+Pot_AE%rvn(j)*2*AUTOA/FELECT**2/SCALE
-             PotAEr(j) = PotHr(j)+PotXCr(j)+Pot_AE%rvn(j)*2/AUTOA/FELECT**2/SCALE
 
-             PotAE(j)= -(Pot_AE%rvn(j)/FELECT+PotAEr_00(j)*FELECT*SCALE/2.0*AUTOA)/Grid0%r(j)
-             WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAE(j)
+!!!!!!!!! POTAE = V_H[n_v]+V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!     
+!          call SetPOT(Grid0, FC%coreden, FC%valeden, PotHr, PotXCr, .FALSE.)
+
+!!!!!!!!! POT_EFF = V_H[n_v+n_Zc]+V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!     
+          call SetPOT(Grid0, FC%coreden, FC%valeden, PotHr, PotXCr, .TRUE.)
+          DO j=1,Grid0%n 
+!             PotAEr_00(j) = PotHr(j)+PotXCr(j)!+Pot_AE%rvn(j)*2*AUTOA/FELECT**2/SCALE
+             PotAEr(j) = PotHr(j)+PotXCr(j)+Pot_AE%rvn(j)
+
+!             WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAEr_00(j)/Grid0%r(j)*SCALE*RYTOEV    !!  POTAE
+             WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAEr(j)/Grid0%r(j)*SCALE*RYTOEV    !!  POT_EFF
           ENDDO
 
          Call setcoretail2(Grid0, FC%coreden)
@@ -419,11 +369,8 @@
          pdensity = 0.d0
          cpdensity = 0.d0
          PotPSCr = 0.d0
-         UNSCREN = .TRUE.
-!         UNSCREN = .FALSE.
 
 !         WRITE(25, *) PAW%hatden
-         IF (UNSCREN) THEN
             WRITE(6,*) 'unscreened POTPS calcualted'
 !            irc=max(PAW%irc,PAW%irc_shap,PAW%irc_vloc,PAW%irc_core)
             irc= FindGridIndex(Grid0, PAW%rc_shap)
@@ -470,7 +417,7 @@
 !   ---------------- Method 1 ----------------------
            DO j =1, Grid0%n
               PotPSC(j)= PotPS(j)-(PotHr(j)+PotXCr(j))/Grid0%r(j)
-              !WRITE(26,*) PotHr(j), POtXCr(j), PotPSC(j), PotPSC(j)*FELECT*SCALE/2.0*AUTOA
+              WRITE(26,*) Grid0%r(j)*AUTOA, PotPSC(j)*RYTOEV*SCALE
            ENDDO
 !   ---------------- Method 2 ----------------------
 !            DO j =1, Grid0%n
@@ -478,24 +425,6 @@
 !!             WRITE(6,*) Grid0%r(j)*AUTOA, POTPSC(j)*FELECT*SCALE/2.0*AUTOA
 !            ENDDO
 !            call SetPOTPS(Grid0, PotPSCr, PotPSC)
-         ELSE
-            WRITE(6,*) 'unscreened POTAE calcualted'
-            call SetPOT(Grid0,FC%coreden, FC%valeden, PotHr, PotXCr, .TRUE.)
-
-            DO j =1, Grid0%n
-               PotAE00(j)= Pot_AE%rvn(j)*2/AUTOA/FELECT**2/SCALE+PotHr(j)+PotXCr(j)
-!              WRITE(6,*) PotAE00(j)
-            ENDDO
-
-            call SetPOT(Grid0,PAW%tcore, FC%valeden, PotHr, PotXCr, .TRUE.)
-!           DO j =1, Grid0%n
-!              PotPSC(j)= PotAE(j)+(PotHr(j)+PotXCr(j))*FELECT*SCALE/2.0*AUTOA/Grid0%r(j)
-!              WRITE(6,*) PotAE00(j)-(PotHr(j)+PotXCr(j)) 
-!           ENDDO
-!
-            PotPSCr = PotAE00-PotHr-PotXCr
-            call SetPOTPS(Grid0, PotPSCr, PotPSC)
-         ENDIF
          OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
          OPEN(UNIT=24,FILE='ATOM_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
          IF (IERR/=0) THEN
@@ -504,11 +433,12 @@
          ENDIF
           DO j=1, Grid0%n
 !             PotPSC(j) = PotPS(j)-PotPSC(j)/Grid0%r(j)
-             WRITE(IU18,*) Grid0%r(j)*AUTOA, PotPS(j)*FELECT*SCALE/2.0*AUTOA
+             WRITE(IU18,*) Grid0%r(j)*AUTOA, PotPS(j)*RYTOEV*SCALE
 !             WRITE(IU20,*) Grid0%r(j)*AUTOA, PotPSC(j)*FELECT*SCALE/2.0*AUTOA
-             WRITE(IU20,*) Grid0%r(j)*AUTOA, PotPSC(j)*FELECT/2.0*AUTOA
+             WRITE(IU20,*) Grid0%r(j)*AUTOA, PotPSC(j)*RYTOEV*SCALE
           ENDDO
 
+        STOP
         CALL Report_Pseudopotential(Grid,PAW)
 
         CALL SPMatrixElements(Grid,FCPot,FC,PAW)

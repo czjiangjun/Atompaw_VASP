@@ -110,7 +110,7 @@ def Data_compare_Fig(Properties, data, name):
     elif (Properties == "density" and data == "CORE"):
        gp.c('set yrange[0:9]')
     elif (Properties == "potential" and data == "POTAE"):
-       gp.c('set yrange[-100: 200]')
+       gp.c('set yrange[-100000: 200]')
     elif (Properties == "potential" and data == "POTPS"):
        gp.c('set yrange[-50:-15]')
     elif (Properties == "potential" and data == "POTPSC"):
@@ -133,7 +133,7 @@ def main():
 #    time.sleep(5)
 
 
-    Data_Fig("potential", "VASP", "VAL", "POTAE_data")
+#    Data_Fig("potential", "VASP", "VAL", "POTAE_data")
 #    Data_Fig("potential", "VASP", "POTAE", "POTAE_data")
 #    Data_compare_Fig("wavefunction", "WAE", "WAE_data")
 #    Data_compare_Fig("wavefunction", "WPS", "WPS_data")
@@ -141,7 +141,7 @@ def main():
 #    Data_compare_Fig("density", "RHOV", "RHOAE_data")
 #    Data_compare_Fig("density", "CORE", "CORE_data")
 #    Data_compare_Fig("density", "PCORE", "PCORE_data")
-#    Data_compare_Fig("potential", "POTAE", "POTAE_data")
+    Data_compare_Fig("potential", "POTAE", "POTAE_data")
 #    Data_compare_Fig("potential", "POTPS", "POTPS_data")
 #    Data_compare_Fig("potential", "POTPSC", "POTPSC_data")
 
