@@ -606,7 +606,8 @@ END FUNCTION WINDOW
             POTPSC(K)=RHO*4*PI0*R(K)**2
          ENDIF
       ENDDO
-!      WRITE(95,"(2F14.7)") (R(K), POTPSC(K)*R(K)/RYTOEV/AUTOA,K=1,NMAX)
+!      WRITE(6,"(2F14.7)") (R(K), POTPSC(K)*R(K)/RYTOEV/AUTOA,K=1,NMAX)
+      WRITE(6,"(2F14.7)") (R(K), POTPSC(K), K=1,NMAX)
 
       END
 

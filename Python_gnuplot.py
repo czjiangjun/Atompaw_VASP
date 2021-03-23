@@ -39,7 +39,7 @@ v
 c
 v
 1
-1.83  1.41   1.47    1.51
+1.83  1.41   1.07    1.51
 y
 -0.60
 n
@@ -112,14 +112,48 @@ def Data_compare_Fig(Properties, data, name):
     elif (Properties == "potential" and data == "POTAE"):
        gp.c('set yrange[-100000: 200]')
     elif (Properties == "potential" and data == "POTPS"):
-       gp.c('set yrange[-50:-15]')
+       gp.c('set yrange[-100:1200]')
     elif (Properties == "potential" and data == "POTPSC"):
-       gp.c('set yrange[-180:-20]')
+       gp.c('set yrange[-180:1200]')
     else:
 #       gp.c('set yrange[-50:250]')
        gp.c('set yrange[0:4]')
     gp.c(plot_command_VASP)
     gp.c(plot_command_ATOM)
+    # gp.c('plot "VASP_WAE" u 1:2 w p pt 3 ps 2 title "VASP-AE"')
+    # gp.c(plot_command_ATOM)
+    # gp.p('myfigure.ps')
+    gp.p(Fig_name)
+
+def Data_compare_Fig2(Properties, data1, data2, name):
+    TYPE1 = "VASP-"+data1
+    TYPE2 = "VASP-"+data2
+
+    plot_command1 = "plot "+'"VASP_'+data1 +'" '+'u 1:2 w p pt 3 lw 1.2 title "'+TYPE1+'"'
+    plot_command2 = "replot "+'"VASP_'+data2 +'" '+'u 1:2 w l lt 5 lw 1.8 title "'+TYPE2+'"'
+#    plot_command_ATOM = "replot "+'"VASP_'+data +'" '+'u 1:3 w l lt 5 lw 1.8 title "'+TYPE2+'"'
+#    print(plot_command_VASP)
+#    exit ()
+    Fig_title = "set title "+ '"' + name +'"'
+    Fig_name = name+".eps"
+
+    gp.c(Fig_title)
+    gp.c('set xrange[0:3.0]')
+    if (Properties == "wavefunction"):
+       gp.c('set yrange[-1:1.5]')
+    elif (Properties == "density" and data == "PCORE"):
+       gp.c('set yrange[0:1]')
+    elif (Properties == "density" and data == "CORE"):
+       gp.c('set yrange[0:9]')
+    elif (Properties == "potential" and data1 == "POTAE" and data2 == "POTPS"):
+       gp.c('set yrange[-50: 100]')
+    elif (Properties == "potential" and data1 == "POTAE" and data2 == "POTPSC"):
+       gp.c('set yrange[-50: 50]')
+    else:
+#       gp.c('set yrange[-50:250]')
+       gp.c('set yrange[0:4]')
+    gp.c(plot_command1)
+    gp.c(plot_command2)
     # gp.c('plot "VASP_WAE" u 1:2 w p pt 3 ps 2 title "VASP-AE"')
     # gp.c(plot_command_ATOM)
     # gp.p('myfigure.ps')
@@ -133,7 +167,6 @@ def main():
 #    time.sleep(5)
 
 
-#    Data_Fig("potential", "VASP", "VAL", "POTAE_data")
 #    Data_Fig("potential", "VASP", "POTAE", "POTAE_data")
 #    Data_compare_Fig("wavefunction", "WAE", "WAE_data")
 #    Data_compare_Fig("wavefunction", "WPS", "WPS_data")
@@ -141,9 +174,12 @@ def main():
 #    Data_compare_Fig("density", "RHOV", "RHOAE_data")
 #    Data_compare_Fig("density", "CORE", "CORE_data")
 #    Data_compare_Fig("density", "PCORE", "PCORE_data")
-    Data_compare_Fig("potential", "POTAE", "POTAE_data")
+#    Data_compare_Fig("potential", "POTAE", "POTAE_data")
 #    Data_compare_Fig("potential", "POTPS", "POTPS_data")
 #    Data_compare_Fig("potential", "POTPSC", "POTPSC_data")
+
+    Data_compare_Fig2("potential",  "POTAE", "POTPS", "VASP")
+    Data_compare_Fig2("potential",  "POTAE", "POTPSC", "VASP")
 
 if __name__ == '__main__':
     main()

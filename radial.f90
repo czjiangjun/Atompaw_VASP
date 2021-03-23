@@ -330,6 +330,86 @@
 
 !*******************************************************************
 !
+!  RAD_AUG_PROJ
+!  calculate the integral
+!   D(ll'LM) =  \int V(r,L,M) Q(r,L) Q(PAW,ll' L) dr
+!  on a radial grid
+!  Q(r,L) are the L-dependent 1-normalized compensation charges
+!  the potential is given by
+!       V(r) =  \sum_lm pot_lm(r) * Y_lm(r)
+!  and   pot_lm(r) is stored in POT(2l+1+m,..)
+!
+!*******************************************************************
+
+    SUBROUTINE RAD_AUG_PROJ( POT, R, DLM, CHANNELS, L, &
+         LYMAX, AUG, QPAW )
+      USE ini
+      IMPLICIT NONE
+
+      REAL(q) :: POT(:,:)
+      TYPE (rgrid) R
+      REAL(q) :: DLM(:)
+      REAL(q) :: AUG(:,0:)    ! 1-normalized L-dep compensation charge
+      REAL(q) :: QPAW(:,:,0:) ! moments of compensation charges Q(PAW,ll L)
+      INTEGER :: LYMAX        ! maximum L
+      INTEGER CHANNELS,L(:)
+   ! local variables
+      REAL(q) :: RHOLMT((LYMAX+1)*(LYMAX+1)),SUM
+      INTEGER CH1,CH2,LL,LLP,LM,LMP,I,LMAX
+      INTEGER IBASE,JBASE,LMIN,LMAIN,MMAIN,LMMAIN
+!-----------------------------------------------------------------------
+! first calculate \int V(L,M) Q(L,M)
+!-----------------------------------------------------------------------
+      RHOLMT=0
+      ! could be replaced by matrix vecor DGEMV
+      DO LMAIN=0,LYMAX
+         DO MMAIN=1,LMAIN*2+1
+            LMMAIN=LMAIN*LMAIN+MMAIN
+            SUM=0
+            DO I=1,R%NMAX
+               SUM=SUM+POT(I,LMMAIN)*AUG(I,LMAIN)
+            ENDDO
+            RHOLMT(LMMAIN)=SUM
+         ENDDO
+      ENDDO
+!-----------------------------------------------------------------------
+! than multiply with QPAW(llp, L) and add the DLM
+!-----------------------------------------------------------------------
+      IBASE=0
+
+      LM=1
+      DO CH1=1,CHANNELS
+      LMP=LM
+      DO CH2=CH1,CHANNELS
+      ! quantum numbers l and lp of these two channels
+         LL =L(CH1)
+         LLP=L(CH2)
+      ! Lmin and Lmax
+         LMIN=ABS(LL-LLP) ; LMAX=ABS(LL+LLP)
+         JBASE=IBASE-LMIN*LMIN
+      ! add to LM dependet charge
+         DO LMAIN=LMIN,MIN(LYMAX,LMAX),2
+         DO MMAIN=1,LMAIN*2+1
+            LMMAIN=LMAIN*LMAIN+MMAIN
+            DLM(LMMAIN+JBASE)=DLM(LMMAIN+JBASE)-RHOLMT(LMMAIN)*QPAW(CH1,CH2,LMAIN)
+         ENDDO
+         ENDDO
+
+      IBASE=IBASE+(2*LL+1)*(2*LLP+1)
+      LMP=LMP+2*LLP+1
+      ENDDO
+      LM =LM +2*LL +1
+      ENDDO
+!#ifdef debug
+      WRITE(0,*) 'RAD_AUG_PROJ: int V Q(LM) is'
+      DO LL=0,LYMAX
+         WRITE(0,'(I3,10F10.5)') LL,(RHOLMT(LL**2+I)*2*SQRT(PI),I=1,LL*2+1)
+      ENDDO
+!#endif
+    END SUBROUTINE RAD_AUG_PROJ
+
+!*******************************************************************
+!
 !  RAD_PROJ_KINPOT
 !  calculate the integral
 !'   D(ll',LM) =  D(ll',LM) + A * < nabla phi_l' | V(L,M) | nabla phi_l >
