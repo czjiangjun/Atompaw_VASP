@@ -5,6 +5,7 @@
          USE setexm
 !         USE core_rel
          USE PSEUDO_struct  ! VASP_Pseudo_struct
+         USE rhfatm         ! VASP_rhfatm
          USE GlobalMath
          USE atomdata
          USE aeatom
@@ -39,11 +40,12 @@
          TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
          TYPE(potcar), POINTER :: PP
          TYPE(INFO_STRUCT) :: INFO
+         TYPE(in_struct) IO
 !         TYPE(PseudoInfo) :: PAW
 
          INTEGER :: ifinput,ifen,Z
          INTEGER :: NTYP, NTYPD, LDIM, LDIM2, LMDIM,CHANNELS, LMAX, LMMAX, LI
-         INTEGER :: LMAX_TABLE
+         INTEGER :: LMAX_TABLE, LYMAX 
          REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
          REAL(q) :: DHARTREE, QTEST,SCALE, DOUBLEAE, EXCG
          REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOV(:)
@@ -52,6 +54,7 @@
          REAL(q), ALLOCATABLE :: RHOLM(:), DLM(:)
          CHARACTER(LEN=2) :: TYPE(1)
          LOGICAL ::   LPAW,  success, UNSCREN
+!         INTEGER, EXTERNAL :: MAXL1
 
          ALLOCATE (P(1))
          NTYP = 1
@@ -87,6 +90,10 @@
      &                  CHANNELS, IU0, IU6, -1, LPAW)
        PP => P(1)
        SCALE = 2.0*sqrt(PI0)
+
+        CALL RHFATM_SET_PP(PP, IO)
+        STOP
+
       OPEN(UNIT=7,FILE='VASP_WAE',STATUS='UNKNOWN',IOSTAT=IERR)
       OPEN(UNIT=8,FILE='VASP_WPS',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
@@ -102,7 +109,8 @@
           WRITE(IU6,*)
           WRITE(IU7,*)
          ENDDO
-!
+
+
       OPEN(UNIT=13,FILE='VASP_CORE',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=13,FILE='VASP_CORE',STATUS='OLD')
@@ -127,6 +135,13 @@
 !      WRITE(6,*) 'QTEST=', QTEST, QTEST*SCALE
 
       LMMAX = (PP%LMAX+1)**2
+      LYMAX =MAXL1(PP)*2
+
+
+      PP%LMAX_CALC=LMAX
+      
+      CALL SET_PAW_AUG(NTYPD, PP, IU6, PP%LMAX_CALC, .TRUE.)
+!      WRITE(6,*) 'LYMAX=', LYMAX
       ALLOCATE(RHO(PP%R%NMAX, LMMAX,1), V(PP%R%NMAX, LMMAX,1), RHOAE00(PP%R%NMAX))
       ALLOCATE(POT(PP%R%NMAX, LMMAX,1), POTAEC(PP%R%NMAX))
       ALLOCATE(POTAE_TEST(PP%R%NMAX))
@@ -152,6 +167,8 @@
       CALL SET_CRHODE_ATOM(CRHODE,PP)
       CALL TRANS_RHOLM(CRHODE, RHOLM, PP)
       CALL RAD_CHARGE(RHO(:,:,1), PP%R, RHOLM(:),PP%LMAX, PP%LPS, PP%WAE)
+      CALL RAD_AUG_CHARGE(  RHO(:,:,1), PP%R, RHOLM, PP%LMAX, PP%LPS,  &
+              LYMAX, PP%AUG, PP%QPAW )
 
       OPEN(UNIT=25,FILE='VASP_VAL',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
@@ -241,8 +258,8 @@
       CALL RAD_POT_WEIGHT( PP%R, 1, 0, POT)
 
       CALL RAD_PROJ(  POT(:,:,1)  , PP%R,-1._q, DLM, PP%LMAX, PP%LPS, PP%WPS )
-!      CALL RAD_AUG_PROJ( POT(:,:,1), PP%R, DLM, PP%LMAX, PP%LPS, &
-!                  0, PP%AUG, PP%QPAW )
+      CALL RAD_AUG_PROJ( POT(:,:,1), PP%R, DLM, PP%LMAX, PP%LPS, &
+                  0, PP%AUG, PP%QPAW )
 
       CALL VASP_POT(RHO, 0, PP%R, POT, PP%RHOPS)
 
@@ -251,7 +268,7 @@
          OPEN(UNIT=21,FILE='VASP_POTPS',STATUS='OLD')
       ENDIF
           DO j=1, PP%R%NMAX
-             WRITE(IU17,'(4f20.8)') PP%R%R(j),  PP%POTPS(j)    !,POT(j,1,1)/SCALE 
+             WRITE(IU17,'(4f20.8)') PP%R%R(j),  PP%POTPS(j), -POT(j,1,1)/SCALE 
 !             WRITE(IU17,'(4f20.8)') PP%R%R(j),  POT(j,1,1)/SCALE, PP%POTPS(j)
           ENDDO
       
@@ -980,7 +997,170 @@
       ENDDO
 
 
-    END SUBROUTINE TRANS_RHOLM
+      END SUBROUTINE TRANS_RHOLM
+
+      FUNCTION MAXL1(P)
+      USE prec
+      USE pseudo
+      IMPLICIT NONE
+      INTEGER MAXL1
+      TYPE (potcar) P
+! local varibale
+      INTEGER I,LTMP,CHANNELS
+
+      MAXL1=0
+
+      CHANNELS=P%LMAX
+      LTMP=0
+      DO I=1,CHANNELS
+         LTMP=MAX( P%LPS(I),LTMP )
+      ENDDO
+      MAXL1=LTMP
+
+      END FUNCTION MAXL1
+
+
+!*******************************************************************
+!
+!  start up procedure for PAW
+!  checks internal consistency of the QPAW
+!  and sets up the compensation charges
+!  on the radial grid, and spline coefficients which are used
+!  to interpolate compensation charges in us.F
+!
+!*******************************************************************
+
+      SUBROUTINE SET_PAW_AUG(NTYPD, P, IU6, LMAX_CALC, LCOMPAT)
+        USE radial
+!        USE LDAPLUSU_MODULE
+        IMPLICIT NONE
+        INTEGER NTYPD
+        INTEGER IU6
+        TYPE (potcar),TARGET :: P
+        TYPE (rgrid),POINTER :: R
+        INTEGER LMAX_CALC  ! if -1 mimic US PP (see below)
+      ! local variables
+        INTEGER NTYP,CHANNELS,LMAX,L,LP,N,I, LMAX_MIX
+        INTEGER, PARAMETER :: NQ=2
+        REAL(q)  QQ(NQ)
+        REAL(q)  A(NQ),B,ALPHA
+        REAL(q)  SUM,QR,BJ,STEP,X
+        REAL(q),PARAMETER ::  TH=1E-6_q
+        LOGICAL LCOMPAT
+
+
+      ! if LMAX_CALC == -1 the PAW will run in a special mode
+      ! resulting in essentially US-PP like behaviour
+      ! i.e. all terms are linearized around the atomic reference configuration
+      ! and one center terms are not evaluated
+
+!        IF (LMAX_CALC ==-1) THEN
+!           MIMIC_US=.TRUE.
+!        ELSE
+!           MIMIC_US=.FALSE.
+!        ENDIF
+
+        LMAX_MIX=0
+
+        typ: DO NTYP=1,NTYPD
+           IF (.NOT. ASSOCIATED(P%QPAW)) CYCLE
+
+           ! maximal L mixed in Broyden mixer
+           LMAX_MIX=MAX(LMAX_MIX,P%LMAX_CALC)
+
+           R => P%R
+           CALL  RAD_ALIGN(R,R%RMAX) ! reallign RMAX with grid
+
+           CALL RAD_CHECK_QPAW( R, P%LMAX, &
+                P%WAE, P%WPS, P%QPAW, P%QTOT , P%LPS, P%RDEP )
+!           IF ((USELDApU().OR.LCALC_ORBITAL_MOMENT()).AND.INTEGRALS_LDApU()) THEN
+!              CALL OVERLAP_AE(R,P%RDEP,NTYP,NTYPD,P%LMAX,P%WAE,P%LPS)
+!           ENDIF
+
+           CHANNELS=P%LMAX
+           DO L=1, CHANNELS
+              DO LP=1, P%LMAX
+                 IF (P%LPS(L)==P%LPS(LP)) THEN
+                    P%QION(L,LP)=P%QPAW(L,LP,0)
+                 ENDIF
+              ENDDO
+           ENDDO
+
+           LMAX=0
+           DO I=1,CHANNELS
+              LMAX=MAX( P%LPS(I),LMAX )
+           ENDDO
+
+           LMAX=LMAX*2+1              ! maximum l in augmentation charges
+                                      ! to allow use of one-center dipole operators increase by one
+           ALLOCATE(P%QDEP(NPSRNL,5,0:LMAX), &
+                    P%AUG (R%NMAX,0:LMAX) )
+
+!           IF (IU6>=0) WRITE(IU6,"(' L augmenation charges for type=',I4)") NTYP
+
+           ll: DO L=0,LMAX
+
+        ! find q values
+              CALL AUG_SETQ(L,R,R%RMAX,QQ,A,LCOMPAT)
+!              IF (IU6>=0) WRITE(IU6,2) L,QQ,A
+
+        ! setup augmentation charge on radial grid rho(r) r^2
+
+              DO N=1,R%NMAX
+                 SUM=0
+                 IF (R%R(N) <= R%RMAX) THEN
+                    DO I=1,NQ
+                       QR=QQ(I)*R%R(N)
+                       CALL SBESSEL( QR, BJ, L)
+                       SUM=SUM+BJ*A(I)*R%R(N)*R%R(N)
+                    ENDDO
+                 ENDIF
+                 P%AUG(N,L)=SUM
+              ENDDO
+
+!        ! setup spline for augmentation charge
+!              ! the spline ends at PSDMAX*(NPSRNL-1)/NPSRNL see SETDEP
+!              STEP= R%RMAX/(NPSRNL-1)
+!        ! this resets PSDMAX which is from now on no longer identical to R%RMAX
+!              P(NTYP)%PSDMAX=NPSRNL*STEP
+!
+!              DO N=1,NPSRNL
+!                 X=STEP*(N-1)
+!                 SUM=0
+!                 DO I=1,NQ
+!                    QR=QQ(I)*X
+!                    CALL SBESSEL( QR, BJ, L)
+!                    SUM=SUM+BJ*A(I)
+!                 ENDDO
+!                 P(NTYP)%QDEP(N,1,L) = X
+!                 P(NTYP)%QDEP(N,2,L) = SUM
+!              ENDDO
+!              ! derivative at startpoint
+!              X=STEP/1000
+!              SUM=0
+!              DO I=1,NQ
+!                 QR=QQ(I)*X
+!                 CALL SBESSEL( QR, BJ, L)
+!                 SUM=SUM+BJ*A(I)
+!              ENDDO
+!              SUM=(SUM-P(NTYP)%QDEP(1,2,L))/X
+!              ! derivative is zero for all but L=1
+!              IF (L/=1) THEN
+!                 SUM=0
+!              ENDIF
+!              CALL SPLCOF(P(NTYP)%QDEP(1,1,L),NPSRNL,NPSRNL,SUM)
+           ENDDO ll
+!           P(NTYP)%AUG_SOFT =>P(NTYP)%AUG
+!
+        ENDDO typ
+!
+!! mix only L=SET_LMAX_MIX_TO components in Broyden mixer
+!!        LMAX_MIX=MIN(LMAX_MIX,SET_LMAX_MIX_TO)
+!
+!! if US-PP are mimicked no need to mix any onsite components
+!!        IF (MIMIC_US) LMAX_MIX=-1
+!
+      END SUBROUTINE SET_PAW_AUG
 
 
       END MODULE VASP_POTCAR

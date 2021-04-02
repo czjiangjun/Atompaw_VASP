@@ -36,6 +36,7 @@ MODULE PSEUDO_struct
      REAL(q) USEZ
      REAL(q) USECUT
      REAL(q),POINTER :: PSP(:,:) ! local pseudopotential in rec. space
+     REAL(q),POINTER :: PSP_TEST(:,:) ! local pseudopotential in rec. space
      REAL(q),POINTER :: PSPCOR(:)! partial core information in rec. space
      REAL(q),POINTER :: PSPTAU(:)! partial kinetic energy density  information in rec. space
      REAL(q),POINTER :: PSPTAUVAL(:)! kinetic energy density of valence electrons information in rec. space
@@ -272,6 +273,7 @@ MODULE PSEUDO
       READ(10,'(1X,A1)') CSEL
       READ(10,*) P(NTYP)%PSGMAX
       ALLOCATE(P(NTYP)%PSP(NPSPTS,5))
+      ALLOCATE(P(NTYP)%PSP_TEST(NPSPTS,5))
 
       READ(10,*) (P(NTYP)%PSP (I,2),I=1,NPSPTS)
       DO I=1,NPSPTS

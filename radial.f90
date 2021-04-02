@@ -179,6 +179,72 @@
 !
 !*******************************************************************
 
+    SUBROUTINE RAD_AUG_CHARGE( RHO, R, RHOLM, CHANNELS, L, &
+         LYMAX, AUG, QPAW )
+      USE ini
+      IMPLICIT NONE
+
+      REAL(q) :: RHO(:,:)    ! charge on radial grid
+      TYPE (rgrid) R
+      REAL(q) :: RHOLM(:)    ! occupancy of each llLM channel
+      REAL(q) :: AUG(:,0:)   ! 1-normalized L-dep compensation charge
+      REAL(q) :: QPAW(:,:,0:)! moments of compensation charge Q(PAW,ll L)
+      INTEGER :: LYMAX       ! maximum L
+      INTEGER CHANNELS, L(:)
+   ! local variables
+      REAL(q) :: RHOLMT((LYMAX+1)*(LYMAX+1))
+      INTEGER CH1,CH2,LL,LLP,LM,LMP,I,LMAX
+      INTEGER IBASE,JBASE,LMIN,LMAIN,MMAIN,LMMAIN
+!-----------------------------------------------------------------------
+! first contract to L and M dependent Q(LM)
+!-----------------------------------------------------------------------
+     IBASE=0
+      RHOLMT=0
+
+      LM=1
+      DO CH1=1,CHANNELS
+      LMP=LM
+      DO CH2=CH1,CHANNELS
+      ! quantum numbers l and lp of these two channels
+         LL =L(CH1)
+         LLP=L(CH2)
+      ! Lmin and Lmax
+         LMIN=ABS(LL-LLP) ; LMAX=ABS(LL+LLP)
+         JBASE=IBASE-LMIN*LMIN
+      ! add to LM dependent charge
+         DO LMAIN=LMIN,MIN(LMAX,LYMAX),2
+         DO MMAIN=1,LMAIN*2+1
+            LMMAIN=LMAIN*LMAIN+MMAIN
+            RHOLMT(LMMAIN)=RHOLMT(LMMAIN)+QPAW(CH1,CH2,LMAIN)*RHOLM(LMMAIN+JBASE)
+         ENDDO
+         ENDDO
+
+      IBASE=IBASE+(2*LL+1)*(2*LLP+1)
+      LMP=LMP+2*LLP+1
+      ENDDO
+      LM =LM +2*LL +1
+      ENDDO
+!-----------------------------------------------------------------------
+! then add to charge on radial grid
+!-----------------------------------------------------------------------
+      ! could be replaced by matrix vecor DGEMV
+      DO LMAIN=0,LYMAX
+         DO MMAIN=1,LMAIN*2+1
+            LMMAIN=LMAIN*LMAIN+MMAIN
+            DO I=1,R%NMAX
+               RHO(I,LMMAIN)=RHO(I,LMMAIN)+AUG(I,LMAIN)*RHOLMT(LMMAIN)
+            ENDDO
+         ENDDO
+      ENDDO
+!#ifdef debug
+!      WRITE(0,*) 'RAD_AUG_CHARGE: L compensation charges are'
+!      DO LL=0,LYMAX
+!         WRITE(0,'(I3,10F10.5)') LL,(RHOLMT(LL**2+I)*2*SQRT(PI),I=1,LL*2+1)
+!      ENDDO
+!#endif
+    END SUBROUTINE RAD_AUG_CHARGE
+
+
 !*******************************************************************
 !
 !  RAD_CHARGE
@@ -401,10 +467,10 @@
       LM =LM +2*LL +1
       ENDDO
 !#ifdef debug
-      WRITE(0,*) 'RAD_AUG_PROJ: int V Q(LM) is'
-      DO LL=0,LYMAX
-         WRITE(0,'(I3,10F10.5)') LL,(RHOLMT(LL**2+I)*2*SQRT(PI),I=1,LL*2+1)
-      ENDDO
+!      WRITE(0,*) 'RAD_AUG_PROJ: int V Q(LM) is'
+!      DO LL=0,LYMAX
+!         WRITE(0,'(I3,10F10.5)') LL,(RHOLMT(LL**2+I)*2*SQRT(PI),I=1,LL*2+1)
+!      ENDDO
 !#endif
     END SUBROUTINE RAD_AUG_PROJ
 
@@ -1169,6 +1235,5 @@
       ENDDO
 
     END SUBROUTINE RAD_GGA_XC
-
 
   END MODULE radial
