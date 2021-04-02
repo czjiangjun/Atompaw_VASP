@@ -691,7 +691,6 @@
 
       ! Solve the atomic problem using DFT
       CALL DFATOM(PP,WDF,IO)
-      STOP
 
       ! Solve the atomic problem at the HF level
 !     CALL HFATOM(PP,WHF,IO)
@@ -1697,7 +1696,6 @@
 
       ! Initialize wave functions
       CALL INITWF(PP,W,IO)
-      STOP
 
 !#ifdef debug
       IF (IO%IU6>0) THEN
@@ -4478,7 +4476,6 @@ gga: IF (ISGGA().AND.LADDXC.AND.LADDGC) THEN
       V=0
       ! Hartree potential of the core electrons
       CALL RAD_POT_HAR(0, PP%R, V, PP%RHOAE, SUM)
-      STOP
 
       ! Coulomb potential of the nucleus
       V=V*SCALE - FELECT/PP%R%R*W%Z      

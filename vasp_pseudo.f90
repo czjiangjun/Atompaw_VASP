@@ -91,9 +91,6 @@
        PP => P(1)
        SCALE = 2.0*sqrt(PI0)
 
-        CALL RHFATM_SET_PP(PP, IO)
-        STOP
-
       OPEN(UNIT=7,FILE='VASP_WAE',STATUS='UNKNOWN',IOSTAT=IERR)
       OPEN(UNIT=8,FILE='VASP_WPS',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
@@ -152,6 +149,7 @@
       ALLOCATE(DLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
       RHO = 0
 !
+
 !
 !!!!!!!!!!!!!    RELATION BETWEEN PP%WAE and RHO_V:   \int PP%WAE**2 dR = \int RHO_V*SCALE dR   !!!!!!
 !TEST FOR \int PP%WAE**2 dR
@@ -191,6 +189,10 @@
 !      CALL POT(RHO, Z, PP%R, V)
 !      RHO(:,1,1)=RHOAE00(:)
 
+        CALL RHFATM_SET_PP(PP, IO)
+        WRITE(6,*) 'RHFATOM_SET_PP'
+        STOP
+
 
 !!!!!!!!! POTAE = V_H[n_v]+V_XC[n_v+n_c] != POTAEC  !!!!!!!!!     
       POT = 0
@@ -217,6 +219,11 @@
 
 !!!!!!!!! POTAEC calculated Directed !!!!!!!!!
       CALL RAD_POT_HAR(0, PP%R, POTAEC, PP%RHOAE, DHARTEE)
+
+!      DO j =1, PP%R%NMAX
+!       WRITE(6,*) POTAEC(j)
+!      ENDDO
+!      WRITE(6,*)
       DO j=1, PP%R%NMAX
          POTAEC(j) = POTAEC(j)-FELECT*SCALE/PP%R%R(j)*14.00
       ENDDO
