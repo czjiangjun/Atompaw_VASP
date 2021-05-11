@@ -34,7 +34,7 @@
          REAL(q), ALLOCATABLE :: Pot_eff(:), Pot_teff(:)
          REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
          REAL(q), ALLOCATABLE :: POTAE_TEST(:)
-         REAL(q), ALLOCATABLE :: pdensity(:), d(:) ,cpdensity(:)
+         REAL(q), ALLOCATABLE :: pdensity(:), den(:) ,cpdensity(:)
          INTEGER :: nbase, N, irc, irc_core, irc_shap
          REAL(q) :: Q_00 , Q_00c,tq
          TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
@@ -189,9 +189,15 @@
 !      CALL POT(RHO, Z, PP%R, V)
 !      RHO(:,1,1)=RHOAE00(:)
 
+!!!!!!!!! POTAE = V_H[n_v]+V_XC[n_v+n_c] != POTAEC  !!!!!!!!!     
+!
+!    POTAE:  V(r)-V_H[n_c]-V_Z
+!    \bigg[E_{i,(l=0})-V(r)-\dfrac{\hbar^2}{2m}\bigg(-\dfrac{\mathrm{d}^2}{\dfrac{\mathrm{d}r^2}}+\dfrac{l(l+1)}{r^2}\bigg)\bigg]\phi_{l,E}^{AE}=0
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         CALL RHFATM_SET_PP(PP, IO)
         WRITE(6,*) 'RHFATOM_SET_PP'
-        STOP
+!        STOP
 
 
 !!!!!!!!! POTAE = V_H[n_v]+V_XC[n_v+n_c] != POTAEC  !!!!!!!!!     
@@ -321,6 +327,7 @@
       ALLOCATE(Pot_eff(Grid0%n), Pot_teff(Grid0%n))
       ALLOCATE(PotAE00(Grid0%n), PotPS(Grid0%n))
       ALLOCATE(PotAE(Grid0%n), PotPSC(Grid0%n))
+      ALLOCATE(den(Grid0%n))
 
       OPEN(UNIT=20,FILE='ATOM_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
@@ -328,21 +335,28 @@
       ENDIF
           WRITE(6,*) 'AEPOT calcualted'
 
-!!!!!!!!! POTAE = V_H[n_v]+V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!     
-          call SetPOT(Grid0, FC%coreden, FC%valeden, PotHr, PotXCr, .FALSE.)
+!!!!!!!!! POTAE_TOT = V_Z+V_H[n_c+n_v]+V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!     
+!!!!!!!!! POTAE_TOT ===> Pot_AE%rv
 
-!!!!!!!!! POT_EFF = V_H[n_v+n_Zc]+V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!     
-          call SetPOT(Grid0, FC%coreden, FC%valeden, PotHr, PotXCr, .TRUE.)
-!          PotAEr(:) = PotHr(:)+PotXCr(:)+Pot_AE%rvn(:)*8.0/28.0
-          PotAEr(:) = PotHr(:)+PotXCr(:)+Pot_AE%rvn(:)*8.0/28.0
+!!!!!!!!! POTAEC = V_Z + V_H[n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+          den = 0.d0
+          call SetPOT(Grid0, FC%coreden, den, PotHr, PotXCr, .TRUE.)
+          PotAECr(:) = PotHr(:)+Pot_AE%rvn(:)
+
+!!!!!!!!! POTAE = V_H[n_v] + V_XC[n_c+n_v] !!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!! In calculation, It comes from -( POTAE_TOT - POTAEC ) !!!!!!!!!!!
+!!!!!!!!!!!!!!!      IT IS Big_Num MINUS Big_Num       !!!!!!!!!!!!!!!
+
+          PotAEr(:) = PotAECr(:)-Pot_AE%rv(:)
+
 !          DO j = 1, Grid0%n
 !             WRITE(6,*) Grid0%r(j)*AUTOA, PotHr(j), PotXCr(j), Pot_AE%rvn(j)
+!              WRITE(6,*) Grid0%r(j)*AUTOA, Pot_AE%rv(j)/Grid0%r(j)*RYTOEV
+!             WRITE(6,*) Grid0%r(j)*AUTOA, -Pot_AE%rvn(j)/Grid0%r(j)*RYTOEV
+!              WRITE(6,*) Grid0%r(j)*AUTOA, PotHr(j)/Grid0%r(j)*RYTOEV
+!              WRITE(6,*) Grid0%r(j)*AUTOA, PotAEr(j)/Grid0%r(j)*RYTOEV!, Pot_AE%rv(j)/Grid0%r(j)*RYTOEV
 !          ENDDO
-
-!!!!!!!!! POTAEC = V_H[n_c]+V_Z !!!!!!!!!!!!!!!!!     
-          FC%valeden = 0.0
-          call SetPOT(Grid0, FC%valeden, FC%coreden, PotHr, PotXCr, .FALSE.)
-             PotAECr(:) = PotHr(:)+Pot_AE%rvn(:)
+!          STOP
 
 !!!!!!!!! tcore_den = sum_i B_isin(q_i r)/r !!!!!!!!!!!!!!!!!     
          Call setcoretail2(Grid0, FC%coreden)
@@ -556,7 +570,7 @@
 ! 
         END SUBROUTINE vasp_pseudo
 
-        SUBROUTINE SetPOT(Grid2, coreden, valeden, POTHR, POTXCR, LADD)
+        SUBROUTINE SetPOT(Grid2, coreden, valeden, POTHR, POTXCR, LCORADD, LXCADD)
          USE atomdata
          USE aeatom
          USE atomdata
@@ -567,7 +581,8 @@
         REAL(q) :: density(Grid2%n)
         REAL(q) :: POTXCR(Grid2%n), POTHR(Grid2%n)
         REAL(q) qc, ecoul, v0, etxc, eex, SCALE
-        LOGICAL :: LADD
+        LOGICAL :: LCORADD
+        LOGICAL, OPTIONAL :: LXCADD
 
 !        SCALE = 2.0*sqrt(PI0)
 
@@ -589,9 +604,8 @@
 
 !        Grid2%n = N
 !        Grid2%n=FindGridIndex(Grid, PAW%rc)
-!        WRITE(6,*) 'Grid_N=',Grid2%n
 !        call poisson(Grid2, qc, coreden, POT%rvh, ecoul, v0)
-        IF (.NOT. LADD) THEN
+        IF (.NOT. LCORADD) THEN
             call poisson(Grid2, qc, valeden, POTHR, ecoul, v0)
         ELSE
             call poisson(Grid2, qc, density, POTHR, ecoul, v0)
@@ -602,8 +616,8 @@
 !           WRITE(25,*) Grid2%r(Grid2%n), qc, POT%rvh(Grid2%n)
 !            POTHR(i) = POTHR(i)*FELECT*SCALE/2.0*AUTOA
 !        ENDDO
-
-        call exch(Grid2, density, POTXCR, etxc,eex)
+        IF (PRESENT(LXCADD)) &
+        &  call exch(Grid2, density, POTXCR, etxc,eex)
 !        DO i = 1, Grid2%n 
 !            POTXCR(i) = POTXCR(i)*FELECT*SCALE/2.0*AUTOA
 !        ENDDO
@@ -625,6 +639,7 @@
 
 !        deallocate(density, Vrxc_tmp)
 !        deallocate(POTHR, POTXCR)
+         RETURN
         END SUBROUTINE SetPOT
 
 
@@ -675,6 +690,7 @@
            PotPS(i)=PotPS(i)+al(2)*g/Grid2%r(i)
         enddo
 
+        RETURN
         END SUBROUTINE SetPOT_TEFF
 
 !*********************** SUBROUTINE POT *********************************      

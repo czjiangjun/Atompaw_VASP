@@ -462,6 +462,7 @@
 
       ! Minimal radial grid size (in Angstroem)
       REAL(q), PARAMETER, PRIVATE :: RMAX=250._q
+!      REAL(q), PARAMETER, PRIVATE :: RMAX=2.50_q
 
       ! Sets an upper bound on the amplitude of the tails of the partial waves
       REAL(q), PRIVATE, SAVE :: maxParWaveAmplitude=10._q
@@ -692,6 +693,7 @@
       ! Solve the atomic problem using DFT
       CALL DFATOM(PP,WDF,IO)
 
+      RETURN
       ! Solve the atomic problem at the HF level
 !     CALL HFATOM(PP,WHF,IO)
       CALL HFATOM(PP,WHF,IO,W0=WDF)
@@ -1682,9 +1684,11 @@
       TYPE(in_struct) IO
       ! local variables
       INTEGER I,J,K
-      REAL(q) SUM
+      REAL(q) SUM, SUM1, SUM2
+      REAL(q) SCALE
       REAL(q) DRHO
-      REAL(q), ALLOCATABLE :: RHO(:),RHOP(:),V(:)
+      REAL(q), DIMENSION(PP%R%NMAX)::  V_COR
+      REAL(q), ALLOCATABLE :: RHO(:),RHOP(:),V(:), RHOC(:)
       INTEGER, PARAMETER :: NSCF=500
       REAL(q), PARAMETER :: MIX=0.2_q
       REAL(q), PARAMETER :: EDIFF=1.0E-7
@@ -1715,7 +1719,7 @@
       ENDIF
 !#endif
 
-      ALLOCATE(RHO(W%R%NMAX),RHOP(W%R%NMAX),V(W%R%NMAX))
+      ALLOCATE(RHO(W%R%NMAX),RHOC(W%R%NMAX),RHOP(W%R%NMAX),V(W%R%NMAX))
 
       LFIRST=.TRUE.
 
@@ -1729,13 +1733,25 @@
       DO I=1,W%NS
          RHO(:)=RHO(:)+W%OCC(I)*W%W(:,I)*W%W(:,I)
       ENDDO
+      RHOC=0
+      DO I=1,W%NSCORE
+         RHOC(:)=RHOC(:)+W%OCC(I)*W%W(:,I)*W%W(:,I)
+      ENDDO
 !#ifdef debug
+      CALL SIMPI(W%R,RHOC,SUM1)
       CALL SIMPI(W%R,RHO,SUM)
       IF (IO%IU6>0) WRITE(*,'(A,I4,F14.7)') 'DFATOM: total initial charge:',NINT(W%Z),SUM
 !#endif
       ! first we try to converge without gradient corrections
       LNOGGA=.FALSE. ; IF (ISGGA()) LNOGGA=.TRUE.
 
+         OPEN(400)
+         WRITE(400,*) SUM1
+         CALL RAD_POT_DFT(RHO,NINT(W%Z),W%R,V,LGGA=.NOT.LNOGGA)
+         CALL RAD_POT_DFT(RHOC,NINT(W%Z),W%R,W%POTAEC,LXC=.FALSE.)
+         WRITE(400,'(4F20.10)') (W%R%R(J), RHOC(J), W%POTAEC(J), -V(J)+W%POTAEC(J), J=1,W%R%NMAX)
+         WRITE(400,'(F20.10)') (W%E(J), J=1,W%NS)
+         WRITE(400,*)
       scf: DO I=1,NSCF
          RHOP=RHO
          ! Get the potential
@@ -1775,12 +1791,38 @@
          WRITE(*,'(A,I3,A)') 'DFATOM: ERROR, unable to reach convergence in ',NSCF,' cycles.'   
          STOP
       ELSE
+         SCALE=2*SQRT(PI)
          ! Recompute POTAE and POTAEC
-         CALL RAD_POT_DFT(RHO,NINT(W%Z),W%R,V)
+!         CALL RAD_POT_DFT(RHO,NINT(W%Z),W%R,V)
+         CALL RAD_POT_DFT(RHO,NINT(W%Z),W%R,V, LGGA=.NOT.LNOGGA)
          CALL RAD_POT_DFT(W%RHOAE,NINT(W%Z),W%R,W%POTAEC,LXC=.FALSE.)
+!         CALL RAD_POT_DFT4(RHO/SCALE,NINT(W%Z),W%R,V)
+!         CALL RAD_POT_DFT4(W%RHOAE/SCALE,NINT(W%Z),W%R,W%POTAEC,LXC=.FALSE.)
+!         CALL RAD_POT_DFT4(PP%RHOAE,NINT(W%Z),PP%R,V_COR,LXC=.FALSE.)
          W%POTAE=V-W%POTAEC
+!         W%POTAE(1:PP%R%NMAX)=V(1:PP%R%NMAX)-V_COR(1:PP%R%NMAX)
          ! Write atomic eigenvalues to OUTCAR
          CALL REPORT(PP,W,IO,"(DFT)")
+!         WRITE(300,'(5F20.10)') (W%R%R(J),W%POTAEC(J), PP%POTAEC(J), W%POTAE(J),   &
+!                                  PP%POTAE(J), J=1,W%R%NMAX)
+         OPEN(600)
+!         CALL SIMPI(PP%R,W%RHOAE,SUM1)
+         CALL SIMPI(W%R,W%RHOAE,SUM1)
+         CALL SIMPI(PP%R,PP%RHOAE*SCALE,SUM2)
+          WRITE(600,'(2F20.10)') SUM1, SUM2
+!         WRITE(400,'(3F20.10)') (PP%R%R(J), PP%RHOAE(J), V_COR(J), J=1,PP%R%NMAX)
+!         WRITE(400,'(5F20.10)') (W%E(J),J=1,W%NSCORE)
+         WRITE(600,'(4F20.10)') (W%R%R(J), W%RHOAE(J), W%POTAEC(J), W%POTAEC(J)-V(J),  J=1,W%R%NMAX)
+!         WRITE(400,'(4F20.10)') (W%R%R(J), W%POTAEC(J), V_COR(J), W%POTAE(J),  J=1,PP%R%NMAX)
+!         WRITE(400,'(4F20.10)') (W%R%R(J), V(J), W%POTAE(J),  PP%POTAE(J), J=1,PP%R%NMAX)
+!          WRITE(400,'(3F20.10)') (W%R%R(J), W%RHOAE(J),  PP%RHOAE(J), J=1,PP%R%NMAX)
+         WRITE(600,'(F20.10)') (W%E(J), J=1,W%NS)
+         DO I = W%NSCORE+1, W%NS
+             WRITE(900,'(2F20.10)') (W%R%R(J), W%W(J,I), J=1,W%R%NMAX)
+         ENDDO
+         CLOSE(400)
+         CLOSE(600)
+!      STOP
 !#ifdef debug
          IF (IO%IU6>0) THEN
          DO I=1,W%NS
@@ -4097,6 +4139,8 @@
       ! Add nuclear potential
       DO K=1,R%NMAX
          VWRK(K,1,1)=VWRK(K,1,1)-FELECT*SCALE*Z/R%R(K)
+!         VWRK(K,1,1)=VWRK(K,1,1)*SCALE-FELECT*SCALE*Z/R%R(K)
+!         VWRK(K,1,1)=VWRK(K,1,1)/SCALE-FELECT*SCALE*Z/R%R(K)
       ENDDO
 
       ! LDA exchange correlation energy, potential,
@@ -4464,31 +4508,52 @@ gga: IF (ISGGA().AND.LADDXC.AND.LADDGC) THEN
       TYPE(atomic) W
       TYPE(in_struct) IO
       ! local variables
-      INTEGER I,J,CHANNEL
-      REAL(q) SCALE,SUM,WN,WNA,ALPHA
+      INTEGER I,J,CHANNEL, ISCF
+      REAL(q) SCALE,SUM,WN,WNA,ALPHA, SUM1, SUM2, DHRO
       REAL(q) F,FDER
-      REAL(q), DIMENSION(PP%R%NMAX) :: RHO,V
+      REAL(q), DIMENSION(PP%R%NMAX) :: RHO,V, V1, V2, V3, V4
+      REAL(q), DIMENSION(W%R%NMAX) :: RHO_CORE, RHO_TOT, RHO_MIX
       REAL(q), DIMENSION(W%R%NMAX) :: TMP
       REAL(q), PARAMETER :: TINY = 1E-5_q
 
       SCALE=1/(2*SQRT(PI))
 
-      V=0
+      V=0; V1 = 0
       ! Hartree potential of the core electrons
       CALL RAD_POT_HAR(0, PP%R, V, PP%RHOAE, SUM)
 
+      CALL RAD_POT_HAR(0, PP%R, V1, PP%RHOAE, SUM1)
+!
       ! Coulomb potential of the nucleus
       V=V*SCALE - FELECT/PP%R%R*W%Z      
+
+!      V1 =(V1 - FELECT/PP%R%R*W%Z/SCALE)*SCALE
+!      V1 =(V1/SCALE - FELECT/PP%R%R*W%Z/SCALE)*SCALE
+!      WRITE(300,'(3F20.10)') W%Z
+!       WRITE(300,'(2F20.10)') (PP%R%R(J),  V1(J)*SCALE, J=1,PP%R%NMAX)
+!       WRITE(300,'(2F20.10)') (PP%R%R(J),  V(J), J=1,PP%R%NMAX)
+!      WRITE(300,'(2F20.10)') (PP%R%R(J),  FELECT/PP%R%R(J)*W%Z, J=1,PP%R%NMAX)
       ! Reference valence atomic potential
       V=V-PP%POTAE
 !#ifdef debug
+!      WRITE(300,'(2F20.10)') (PP%R%R(J),  V(J), J=1,PP%R%NMAX)
+      WRITE(300,'(2F20.10)') (PP%R%R(J),  PP%POTAE(J), J=1,PP%R%NMAX)
       IF (IO%IU6>0) WRITE(300,'(2F20.10)') (PP%R%R(J),V(J), J=1,PP%R%NMAX)
 !#endif
-      ! Compute the core wave functions      
+      ! Compute the core wave functions    
+    RHO_MIX = 0.0  
+!      V= - FELECT/W%R%R*W%Z      
+     SCF: DO ISCF = 1, 100
       W%W=0; W%A=0; W%B=0
-      DO I=1,W%NSCORE
-         CALL CORE_WAVE_FKT(RHO, W%E(I), W%N(I), W%L(I), V, PP%R, NINT(W%Z), &
-        &   A_=W%A(1:PP%R%NMAX,I), B_=W%B(1:PP%R%NMAX,I))
+      RHO_CORE = 0
+      RHO_TOT = 0
+
+!      DO I=1,W%NSCORE
+      DO I=1,W%NS
+!         CALL CORE_WAVE_FKT(RHO, W%E(I), W%N(I), W%L(I), V, PP%R, NINT(W%Z), &
+!        &   A_=W%A(1:PP%R%NMAX,I), B_=W%B(1:PP%R%NMAX,I))
+         CALL CORE_WAVE_FKT(RHO, W%E(I), W%N(I), W%L(I), V, W%R, NINT(W%Z), &
+        &   A_=W%A(1:W%R%NMAX,I), B_=W%B(1:W%R%NMAX,I))
          W%B(:,I)=W%B(:,I)*C
          ! Normalize
          TMP(:)=W%A(:,I)*W%A(:,I)
@@ -4496,7 +4561,52 @@ gga: IF (ISGGA().AND.LADDXC.AND.LADDGC) THEN
          TMP(:)=W%A(:,I)*W%A(:,I)+W%B(:,I)*W%B(:,I)/C/C
          CALL SIMPI(W%R,TMP,WN)         
          W%W(:,I)=W%A(:,I)*SQRT(WN/WNA)         
+!         IF (I .LE. W%NSCORE) RHO_CORE(:) = RHO_CORE(:)+W%OCC(I)*RHO(:)
+         IF (I .LE. W%NSCORE) RHO_CORE(:) = RHO_CORE(:)+W%OCC(I)*W%W(:,I)*W%W(:,I)
+!         RHO_TOT(:) = RHO_TOT(:) +W%OCC(I)*RHO(:) 
+         RHO_TOT(:) = RHO_TOT(:) +W%OCC(I)*W%W(:,I)*W%W(:,I) 
       ENDDO
+
+        RHO_MIX(:) = RHO_MIX(:)+0.2_q*(RHO_TOT(:)-RHO_MIX(:))
+        CALL RAD_POT_DFT(RHO_MIX,NINT(W%Z),W%R,V)
+
+!      V1 = 0.d0 ; V2 = 0.d0
+      CALL SIMPI(W%R,RHO_TOT, SUM1)
+      CALL SIMPI(W%R,RHO_CORE, SUM2)
+!      CALL RAD_POT_DFT(RHO_TOT,NINT(W%Z),W%R,V1)
+!      CALL RAD_POT_DFT(RHO_CORE,NINT(W%Z),W%R,V2, LXC=.FALSE.)
+!      CALL RAD_POT_DFT(PP%RHOAE/SCALE,NINT(W%Z),PP%R,V2, LXC=.FALSE.)
+      WRITE(300,*) SUM1, SUM2, ISCF, W%R%NMAX
+!      V1 = 0.d0; V2 = 0.d0
+!      CALL RAD_POT_HAR(0, PP%R, V1, PP%RHOAE, SUM)
+!      CALL RAD_POT_HAR(0, PP%R, V2, RHO_CORE, SUM)
+!      WRITE(300,'(5F20.10)') (PP%R%R(J),PP%RHOAE(J), RHO_CORE(J), V1(J), V2(J),J=1,PP%R%NMAX)
+!      WRITE(300,'(5F20.10)')
+!      CALL SIMPI(PP%R,PP%RHOAE, SUM1)
+!      WRITE(300,'(3F20.10)') SUM1, SUM2, W%Z
+!      WRITE(300,'(5F20.10)')
+!      WRITE(300,'(5F20.10)') (W%E(J),J=1,W%NSCORE)
+!      WRITE(300,'(5F20.10)')
+!      V3 = V1*SCALE-FELECT/PP%R%R*W%Z-PP%POTAE
+!      V4 = V2*SCALE-FELECT/PP%R%R*W%Z-
+      WRITE(300,'(3F20.10)') (W%R%R(J), RHO_CORE(J), V1(J)-V(J), J=1,W%R%NMAX)
+      WRITE(300,'(F20.10)') (W%E(J), J=1,W%NS)
+
+      DHRO = MAXVAL(ABS(RHO_TOT-RHO_MIX))
+      IF (DHRO < TINY)  EXIT SCF
+
+      ENDDO SCF
+
+      DO I=W%NSCORE+1, W%NS
+         WRITE(700,'(2F20.10)') (W%R%R(J), W%W(J,I), J=1,W%R%NMAX)
+         DO CHANNEL=1, PP%LMAX
+          IF (W%L(I) .EQ. PP%LPS(CHANNEL)) &
+&         WRITE(800,'(2F20.10)') (PP%R%R(J), PP%WAE(J, CHANNEL), J=1,PP%R%NMAX)
+         ENDDO
+      ENDDO
+      WRITE(300,*) 'TEST'
+!      STOP
+
       ! Copy the relevant valence partial waves
       I=W%NSCORE+1
       DO CHANNEL=1,PP%LMAX
@@ -5759,6 +5869,147 @@ gga: IF (ISGGA().AND.LADDXC.AND.LADDGC) THEN
       CALL DEALLOCW(WDF)
       
       END FUNCTION RCRCUT
+
+!*********************** SUBROUTINE RAD_POT_DFT4 ***********************
+!
+!***********************************************************************
+      SUBROUTINE RAD_POT_DFT4(RHO,Z,R,V,EXC,LXC,LGGA)
+
+      USE prec
+      USE ini
+      USE radial
+      USE setexm
+
+      IMPLICIT NONE
+
+      TYPE(rgrid) R      
+      INTEGER Z
+      REAL(q) RHO(R%NMAX)
+      REAL(q) V(R%NMAX)
+      REAL(q), OPTIONAL :: EXC
+      LOGICAL, OPTIONAL :: LXC
+      LOGICAL, OPTIONAL :: LGGA
+      ! local variables
+      INTEGER K
+      REAL(q) SCALE
+      REAL(q) QINT,QINF
+      REAL(q), DIMENSION(:,:,:), ALLOCATABLE :: RWRK1,VWRK
+      REAL(q), DIMENSION(:,:),ALLOCATABLE :: RWRK2
+      REAL(q) EXCG,DHARTREE,DEXC,DVXC,DEXC_GGA,DVXC_GGA,DOUBLEC
+      LOGICAL LADDXC,LADDGC
+      ! Use relativistic corrections to exchange
+      LOGICAL,PARAMETER :: TREL=.TRUE.
+!     LOGICAL,PARAMETER :: TREL=.FALSE.
+      ! Calculate LDA contribution seperately
+      ! TLDA=.FALSE. works only for Perdew Burke Ernzerhof
+      ! in this case non spherical contributions are missing
+      LOGICAL,PARAMETER :: TLDA=.TRUE.
+      ! running averaging-out of spikes in GGA potential
+      INTEGER, PARAMETER :: IVAV=10,IVAVT=5
+      INTEGER IREFIN,IFAULT,I,J,IPOINT,N
+      REAL(q) VAV,VAV2,VAR
+
+      LADDXC=.TRUE.
+      IF (PRESENT(LXC)) LADDXC=LXC
+
+      LADDGC=.TRUE.
+      IF (PRESENT(LGGA)) LADDGC=LGGA
+      
+      SCALE=2*SQRT(PI)
+
+      ALLOCATE(RWRK1(R%NMAX,1,1),RWRK2(R%NMAX,1),VWRK(R%NMAX,1,1))
+      VWRK=0
+      RWRK1(:,1,1)=RHO(:)!/SCALE
+
+      ! Hartree potential
+      DHARTREE=0
+      CALL RAD_POT_HAR(0,R,VWRK(:,1,1),RWRK1(:,1,1),DHARTREE)
+
+!#ifdef debug
+      ! integrate charge
+      CALL SIMPI(R,RWRK1(:,1,1),QINT)
+      ! infer integrated charge from Hartree potential
+      QINF=VWRK(R%NMAX,1,1)*R%R(R%NMAX)/FELECT/2/SQRT(PI)
+      ! write
+!     WRITE(*,'(A,F14.7,A,F14.7)') 'RAD_POT_DFT: Q_int=',QINT*SCALE,' Q_inf=',QINF
+!#endif      
+
+      ! Add nuclear potential
+      DO K=1,R%NMAX
+         VWRK(K,1,1)=VWRK(K,1,1)-FELECT*SCALE*Z/R%R(K)
+!         VWRK(K,1,1)=VWRK(K,1,1)*SCALE-FELECT*SCALE*Z/R%R(K)
+!         VWRK(K,1,1)=VWRK(K,1,1)/SCALE-FELECT*SCALE*Z/R%R(K)
+      ENDDO
+
+      ! LDA exchange correlation energy, potential,
+      ! and double counting corrections
+      DEXC=0
+      DVXC=0
+      
+      DO K=1,R%NMAX
+         RWRK2(K,1)=RWRK1(K,1,1)/(SCALE*R%R(K)*R%R(K))
+      ENDDO
+      
+ lda: IF (TLDA.AND.LADDXC) THEN
+         CALL RAD_LDA_XC(R,TREL,0,RWRK2(:,1),RWRK1(:,:,1),VWRK(:,:,1),DEXC,DVXC,.FALSE.)
+      ENDIF lda
+
+      ! GGA if required
+      DEXC_GGA=0
+      DVXC_GGA=0
+      
+ gga: IF (ISGGA().AND.LADDXC.AND.LADDGC) THEN
+         CALL RAD_GGA_XC(R,TLDA,RWRK2(:,1),RWRK1(:,1,1),VWRK(:,1,1),DEXC_GGA,DVXC_GGA)
+
+         ! smooth the potential near the practical infinity (if necessary)
+         refinement: DO IREFIN=1,100
+            IFAULT=0
+            DO I=1,R%NMAX
+               ! Examine only points at large distances ( > 10 a.u. should be enough ?)
+               IF ((R%R(I)<10._q*AUTOA).OR.(I<=IVAV)) CYCLE 
+               VAV=0._q; VAV2=0._q; IPOINT=0
+               ! Averaged potential around point I (excluding I and a small surrounding
+               ! because at I we could have some   l o c a l   problems ...)
+               DO J=I-IVAV,MIN(I+IVAV,N)
+                  IF (ABS(I-J)<IVAVT) CYCLE 
+                  IPOINT=IPOINT+1
+                  VAV=VAV+VWRK(J,1,1)
+                  VAV2=VAV2+VWRK(J,1,1)*VWRK(J,1,1)
+               ENDDO 
+               VAV =VAV/IPOINT
+               VAV2=VAV2/IPOINT
+               VAR =SQRT(VAV2-VAV*VAV)
+               VAV=VAV
+               ! The 'smoothness criterion' below is quite empirical 
+               IF (ABS(VWRK(I,1,1)-VAV)>VAR*4) THEN
+!#ifdef debug
+                  WRITE(*,*) '<V>, <V V>, sigma', VAV*VAV,VAV2,VAR
+                  WRITE(*,*) 'Refinement step ',IREFIN
+                  WRITE(*,*) 'Serious problem with potential at R =',R%R(I)
+                  WRITE(*,*) 'Potential VR(R)                     =',VWRK(I,1,1)
+                  WRITE(*,*) 'Resetting potential to VR_new(R)    =',VAV
+!#endif
+                  VWRK(I,1,1)=VAV
+                  IFAULT=IFAULT+1
+               ENDIF
+            ENDDO
+            IF (IFAULT==0) EXIT refinement
+         ENDDO refinement
+      ENDIF gga
+
+      V(:)=VWRK(:,1,1)/SCALE
+
+      ! Classical double counting correction:
+      ! E_dc = -1/2 \int rho(r) V_H[rho(r)] dr + E_xc[rho+rhoc]
+      !          -  \int rho(r) V_xc[rho(r)+rhoc(r)] dr
+      DOUBLEC= -DHARTREE/2+DEXC-DVXC+DEXC_GGA-DVXC_GGA
+
+      EXCG= DEXC+DEXC_GGA
+      IF (PRESENT(EXC)) EXC=EXCG
+            
+      DEALLOCATE(RWRK1,RWRK2,VWRK)
+      RETURN
+      END SUBROUTINE RAD_POT_DFT4
 
 
       END MODULE rhfatm
