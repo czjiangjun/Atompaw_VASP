@@ -47,13 +47,13 @@
          INTEGER :: NTYP, NTYPD, LDIM, LDIM2, LMDIM,CHANNELS, LMAX, LMMAX, LI
          INTEGER :: LMAX_TABLE, LYMAX 
          REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
-         REAL(q) :: DHARTREE, QTEST,SCALE, DOUBLEAE, EXCG
+         REAL(q) :: DHARTREE, QCORE,SCALE, DOUBLEAE, EXCG
          REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOV(:)
          REAL(q), ALLOCATABLE :: POTAEC(:)
          REAL(q), ALLOCATABLE :: CRHODE(:,:)
          REAL(q), ALLOCATABLE :: RHOLM(:), DLM(:)
          CHARACTER(LEN=2) :: TYPE(1)
-         LOGICAL ::   LPAW,  success, UNSCREN
+         LOGICAL ::   LPAW,  success, UNSCREN, LXCADD
 !         INTEGER, EXTERNAL :: MAXL1
 
          ALLOCATE (P(1))
@@ -126,7 +126,7 @@
 
       CALL SET_SIMP(PP%R)
 
-!      CALL SIMPI(PP%R,PP%RHOAE, QTEST)
+      CALL SIMPI(PP%R,PP%RHOAE, QCORE)
 !      WRITE(6,*) 'QTEST=', QTEST, QTEST*SCALE
 !      CALL SIMPI(PP%R,PP%RHOPS, QTEST)
 !      WRITE(6,*) 'QTEST=', QTEST, QTEST*SCALE
@@ -185,7 +185,7 @@
 !!!!!!!!! RHO(:) = RHOAE(:) + RHO_V(:) !!!!!!!!!
 !      RHO(:,1,1)=RHOAE00(:)+PP%RHOAE(:)
 
-!      Z=INT(PP%ZVAL_ORIG+PP%ZCORE)
+      Z=INT(PP%ZVALF_ORIG+QCORE)
 !      CALL POT(RHO, Z, PP%R, V)
 !      RHO(:,1,1)=RHOAE00(:)
 
@@ -231,7 +231,7 @@
 !      ENDDO
 !      WRITE(6,*)
       DO j=1, PP%R%NMAX
-         POTAEC(j) = POTAEC(j)-FELECT*SCALE/PP%R%R(j)*14.00
+         POTAEC(j) = POTAEC(j)-FELECT*SCALE/PP%R%R(j)*Z
       ENDDO
 
 !!!!!!!!!!!!!!!!!!!!!!!! POT_EFF = V_H[n_v+n_Zc] +V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -281,8 +281,8 @@
          OPEN(UNIT=21,FILE='VASP_POTPS',STATUS='OLD')
       ENDIF
           DO j=1, PP%R%NMAX
-             WRITE(IU17,'(4f20.8)') PP%R%R(j),  PP%POTPS(j), -POT(j,1,1)/SCALE 
-!             WRITE(IU17,'(4f20.8)') PP%R%R(j),  POT(j,1,1)/SCALE, PP%POTPS(j)
+!             WRITE(IU17,'(4f20.8)') PP%R%R(j),  PP%POTPS(j)
+             WRITE(IU17,'(4f20.8)') PP%R%R(j),  PP%POTPS(j), -POT(j,1,1)/SCALE
           ENDDO
       
 !!!!!!!!!!!!! POTPSC = POT_tEFF - POTPS !!!!!!!!!!!!!!!!!!!!!!!!
@@ -300,13 +300,13 @@
          OPEN(UNIT=23,FILE='VASP_POTPSC',STATUS='OLD')
       ENDIF
 
-      CALL POTTORHO( 0.0, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
-                 .TRUE. , PP%R%NMAX, PP%R%R ,  PP%POTPSC )                        
+!      CALL POTTORHO( 0.0, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
+!                 .TRUE. , PP%R%NMAX, PP%R%R ,  PP%POTPSC )                        
 
           DO j=1, PP%R%NMAX
 !             WRITE(IU19,'(4f20.8)') PP%R%R(j), PP%R%R(j)*PP%POTPSC(j)/RYTOEV/AUTOA
-!             WRITE(IU19,'(4f20.8)') PP%R%R(j), PP%POTPSC(j), PP%POTAE(j), PP%POTPS(j)
-             WRITE(IU19,'(4f20.8)') PP%R%R(j), PP%POTPSC(j)+PP%POTPS(j)
+             WRITE(IU19,'(4f20.8)') PP%R%R(j), PP%POTPSC(j)!, PP%POTAE(j), PP%POTPS(j)
+!             WRITE(IU19,'(4f20.8)') PP%R%R(j), PP%POTPSC(j)+PP%POTPS(j)
           ENDDO
 
 !             WRITE(IU19,*)
@@ -356,7 +356,11 @@
 !              WRITE(6,*) Grid0%r(j)*AUTOA, PotHr(j)/Grid0%r(j)*RYTOEV
 !              WRITE(6,*) Grid0%r(j)*AUTOA, PotAEr(j)/Grid0%r(j)*RYTOEV!, Pot_AE%rv(j)/Grid0%r(j)*RYTOEV
 !          ENDDO
-!          STOP
+          DO j=1,Grid0%n 
+             WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAEr(j)/Grid0%r(j)*RYTOEV! , Pot_teff(j)!*SCALE*RYTOEV   !!  POT_EFF
+!             WRITE(6,*) Grid0%r(j)*AUTOA, Pot_AE%rv(j), Pot_teff(j)!*Grid0%r(j)!*SCALE*RYTOEV   !!  POT_EFF
+          ENDDO
+!          STOP   !! POTAE TEST CORRECT
 
 !!!!!!!!! tcore_den = sum_i B_isin(q_i r)/r !!!!!!!!!!!!!!!!!     
          Call setcoretail2(Grid0, FC%coreden)
@@ -411,21 +415,23 @@
 !!          WRITE(IU13,*) Grid0%r(j)*AUTOA, PAW%tphi(j,i)/sqrt(AUTOA)
 !      ENDDO
 
-!!!!!!!!!!!!!!!!!!!! POT_tVeff FROM POT_EFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!     
+         Call Report_Pseudobasis(Grid0,PAW,ifen)
+         Call Set_PAW_MatrixElements(Grid0,PAW)
+         CALL logderiv(Grid,FCPot,PAW)
+         CALL ftprod(Grid)
 !!   ---------------- Method 1 ----------------------
-!         Call Report_Pseudobasis(Grid0,PAW,ifen)
-!         Call Set_PAW_MatrixElements(Grid0,PAW)
-!         CALL logderiv(Grid,FCPot,PAW)
-!         CALL ftprod(Grid)
-!         CALL FindVlocfromVeff(Grid,FCOrbit,PAW)
+         CALL FindVlocfromVeff(Grid,FCOrbit,PAW)
 
 !!   ---------------- Method 2 ----------------------
-         call SetPOT_TEFF(Grid0, PotAEr, Pot_teff)
+!!!!!!!!!!!!!!!!!!!! POT_tVeff FROM POT_EFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!     
+         DO i = 1, Grid0%n
+              Pot_eff(i) = Pot_AE%rv(i)/Grid0%r(i)
+         ENDDO
+         call SetPOT_TEFF(Grid0, Pot_eff, Pot_teff)
          
           DO j=1,Grid0%n 
-
-             WRITE(IU16,*) Grid0%r(j)*AUTOA, -PotAEr(j)/Grid0%r(j)!*SCALE*RYTOEV , Pot_teff(j)!*SCALE*RYTOEV   !!  POT_EFF
-!             WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAEr(j), Pot_teff(j)*Grid0%r(j)!*SCALE*RYTOEV   !!  POT_EFF
+!             WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAEr(j)/Grid0%r(j)*RYTOEV! , Pot_teff(j)!*SCALE*RYTOEV   !!  POT_EFF
+             WRITE(6,*) Grid0%r(j)*AUTOA, Pot_eff(j), Pot_teff(j)!*Grid0%r(j)!*SCALE*RYTOEV   !!  POT_EFF
           ENDDO
 
 !!!!!!!!!! PSEUDO Calculations !!!!!!!!!!!!!!!!!!!!         
@@ -467,13 +473,13 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !            irc=max(PAW%irc,PAW%irc_shap,PAW%irc_vloc,PAW%irc_core)
             irc= FindGridIndex(Grid0, PAW%rc_shap)
-!            N = Grid0%n
+            N = Grid0%n
 !            Q_00 = integrator(Grid0, PAW%den, 1, N) 
-!           write(6,*) 'Q_00 for atom ', irc, Q_00
+!           write(6,*) 'Q_00 for atom ', N, Q_00, PAW%den
 !            Q_00 = integrator(Grid0, PAW%den, 1, irc) 
 !           write(6,*) 'Q_00 for atom ', irc, Q_00
 !            Q_00 = integrator(Grid0, PAW%tden, 1, N) 
-!           write(6,*) 'Q_00 for atom ', irc, Q_00
+!           write(6,*) 'Q_00 for atom ', N, Q_00
 !            Q_00 = integrator(Grid0, PAW%tden, 1, irc) 
 !           write(6,*) 'Q_00 for atom ', irc, Q_00
 !            Q_00 = (integrator(Grid0, PAW%den, 1, irc)-integrator(Grid0,PAW%tden,1, irc)) 
@@ -498,33 +504,30 @@
 !             Q_00= integrator(Grid0, Q_00*PAW%hatden, 1, irc)
 !           write(6,*) 'Q_00 for atom ', irc, Q_00
 !             Q_00= integrator(Grid0, (10-Q_00)*PAW%hatden, 1, irc)
-!           write(6,*) 'Q_00 for atom ', irc, Q_00
+!           write(6,*) 'Q_00c for atom ', irc, Q_00c
 !            pdensity=PAW%tden
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!!!!!! tn = tn_v + that n = tn_v + \sum Qg
-              pdensity=PAW%tden!+(Q_00+Q_00c)*PAW%hatden
+              pdensity=(PAW%tden+(Q_00)*PAW%hatden)
 !              pdensity=PAW%tden+Q_00*PAW%hatden
 !              cpdensity=PAW%tcore+Q_00c*PAW%hatden
 
 !!!!!!!!! POTPS = V_H[tn_v+that_n]+V_XC[tn_v+that_n+tn_c] !!!!!!!!!!!!!!!!!     
-            call SetPOT(Grid0, PAW%tcore, pdensity, PotHr, PotXCr, .FALSE.)
+!            call SetPOT(Grid0, PAW%tcore, pdensity, PotHr, PotXCr, .FALSE.)
+            call SetPOT(Grid0, PAW%tcore, pdensity, PotHr, PotXCr, .FALSE., LXCADD=.TRUE.)
 !            call SetPOT(Grid0, cpdensity, pdensity, PotHr, PotXCr, .FALSE.)
 
             DO j=1,Grid0%n 
-              PotPS(j) = -(PotHr(j)+PotXCr(j))/Grid0%r(j)
+              PotPS(j) = -(PotHr(j)+PotXCr(j))
             ENDDO
 
-!!!!!!!!!!!!!!!!!!!  POT_PSP = POT_tVEFF - Pot_PS  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!  POT_PSC = POT_tVEFF - Pot_PS  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !           call SetPOT(Grid0,PAW%tcore, pdensity , PotHr, PotXCr, .FALSE.)
             DO j =1, Grid0%n
-              PotPSC(j)= Pot_teff(j)-PotPS(j)*SCALE
-!              PotPSC(j) = PotPSC(j)/SCALE
+              PotPSC(j)= Pot_teff(j)+PotPS(j)/Grid0%r(j)
             ENDDO
-
-!!   ---------------- POTAEC IN REAL ----------------------
-!            call SetPOT_TEFF(Grid0, PotAECr, PotPSC)
 
          OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
          OPEN(UNIT=24,FILE='ATOM_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
@@ -534,10 +537,13 @@
          ENDIF
 
           DO j=1, Grid0%n
-             WRITE(IU18,*) Grid0%r(j)*AUTOA, PotPS(j)*RYTOEV!*SCALE
-             WRITE(IU20,*) Grid0%r(j)*AUTOA, -PotPSC(j)*RYTOEV!*SCALE
+             WRITE(IU18,*) Grid0%r(j)*AUTOA, PotPS(j)/Grid0%r(j)*RYTOEV
+             WRITE(IU20,*) Grid0%r(j)*AUTOA, PotPSC(j)*RYTOEV
           ENDDO
 
+
+!!   ---------------- POTAEC IN REAL ----------------------
+!            call SetPOT_TEFF(Grid0, PotAECr, PotPSC)
 
 
          STOP
@@ -643,19 +649,25 @@
         END SUBROUTINE SetPOT
 
 
-        SUBROUTINE SetPOT_TEFF(Grid2, POTAE, POTPS)
+        SUBROUTINE SetPOT_TEFF(Grid2, POTAE, POTPS, RC_CUT)
          TYPE(GridInfo) :: Grid2
          REAL(q) :: PotPS(Grid2%n), PotAE(Grid2%n), PotAEr(Grid2%n)
-         REAL(q) :: ql(2), qr, rc, xx(2), bb(2), alpha, beta
-         REAL(q) :: g, gp, gpp, gg
+         REAL(q) :: ql(2), qr, xx(2), bb(2), alpha, beta
+         REAL(q) :: RC, g, gp, gpp, gg
          REAL(q) :: jbes, jbesp, jbespp, amat(2,2), al(2)
+         REAL(q), OPTIONAL :: RC_CUT
          INTEGER :: irc, i
 
-      irc=PAW%irc_vloc
-      rc=PAW%rc_vloc
+         IF (PRESENT(RC_CUT)) THEN
+            irc= FindGridIndex(Grid2, RC_CUT)
+            rc = RC_CUT
+         ELSE
+           irc=PAW%irc_vloc
+           rc=PAW%rc_vloc
+      ENDIF
 
       PotAEr = 0.d0
-      POTPS = 0.d0
+      PotPS = 0.d0
       PotAEr= POTAE
       alpha=1-rc*Gfirstderiv(Grid2,irc,PotAEr)/PotAEr(irc)
       beta=1.0d0
@@ -679,15 +691,15 @@
       al(1)=(amat(2,2)*bb(1)-amat(1,2)*bb(2))/det
       al(2)=(amat(1,1)*bb(2)-amat(2,1)*bb(1))/det
 
-      PotPS=PotAEr/Grid%r
+      PotPS=PotAEr!/Grid%r
 
         do i=1,irc-1
            qr=ql(1)*Grid2%r(i)
            call jbessel(g,gp,gpp,0,2,qr)
-           PotPS(i)=al(1)*g/Grid2%r(i)
+           PotPS(i)=al(1)*g!/Grid2%r(i)
            qr=ql(2)*Grid2%r(i)
            call jbessel(g,gp,gpp,0,2,qr)
-           PotPS(i)=PotPS(i)+al(2)*g/Grid2%r(i)
+           PotPS(i)=PotPS(i)+al(2)*g!/Grid2%r(i)
         enddo
 
         RETURN

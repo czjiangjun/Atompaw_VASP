@@ -2,7 +2,6 @@
 #!coding = utf-8
 import os
 import time
-import PyGnuplot  
 
 # g = PyGnuplot.Gnuplot()   
 
@@ -18,7 +17,7 @@ import numpy as np
 #gp.c('plot "tmp.dat" u 1:2 w lp')
 #gp.c('replot "tmp.dat" u 1:3 w lp')
 # gp.c('set encoding utf8')
-# gp.c('set xlabel "横坐标"')
+# gp.c('set xlabel "x"')
 
 
 # current_path = os.system("pwd")
@@ -168,18 +167,17 @@ def main():
 
 
 #    Data_Fig("potential", "VASP", "POTAE", "POTAE_data")
-#    Data_compare_Fig("wavefunction", "WAE", "WAE_data")
-#    Data_compare_Fig("wavefunction", "WPS", "WPS_data")
-#    Data_compare_Fig("density", "RHOV", "RHOAE_data")
-#    Data_compare_Fig("density", "RHOV", "RHOAE_data")
-#    Data_compare_Fig("density", "CORE", "CORE_data")
-#    Data_compare_Fig("density", "PCORE", "PCORE_data")
-#    Data_compare_Fig("potential", "POTAE", "POTAE_data")
-#    Data_compare_Fig("potential", "POTPS", "POTPS_data")
-#    Data_compare_Fig("potential", "POTPSC", "POTPSC_data")
+    Data_compare_Fig("wavefunction", "WAE", "WAE_data")
+    Data_compare_Fig("wavefunction", "WPS", "WPS_data")
+    Data_compare_Fig("density", "RHOV", "RHOAE_data")
+    Data_compare_Fig("density", "RHOV", "RHOAE_data")
+    Data_compare_Fig("density", "CORE", "CORE_data")
+    Data_compare_Fig("density", "PCORE", "PCORE_data")
+    Data_compare_Fig("potential", "POTAE", "POTAE_data")
+    Data_compare_Fig("potential", "POTPS", "POTPS_data")
+    Data_compare_Fig("potential", "POTPSC", "POTPSC_data")
 
-    Data_compare_Fig2("potential",  "POTAE", "POTPS", "VASP")
-    Data_compare_Fig2("potential",  "POTAE", "POTPSC", "VASP")
+#    Data_compare_Fig2("potential",  "POTAE", "POTPSC", "VASP")
 
 if __name__ == '__main__':
     main()
