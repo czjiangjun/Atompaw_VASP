@@ -11,6 +11,7 @@ MODULE gridmod
      INTEGER :: n
      INTEGER :: ishift
      REAL(8) :: h
+     REAL(8), POINTER :: SI(:)
      REAL(8), POINTER :: r(:)
      REAL(8), POINTER :: drdu(:)    ! for loggrid -- dr/du
      REAL(8), POINTER :: pref(:)    ! for loggrid -- r0*exp(u/2)
@@ -2369,5 +2370,50 @@ CONTAINS
     DEALLOCATE(a,b,c,p)
 
   END SUBROUTINE midrange_numerov
+
+
+    SUBROUTINE SIMPI_R(R0,F,FI)
+      IMPLICIT NONE
+!      TYPE (rgrid) R
+      TYPE(GridInfo) :: R0
+      REAL(8)  F(:),FI,SUM
+      INTEGER   K
+
+      SUM=0
+!OCL SCALAR
+      DO K=1,R0%n
+         SUM=SUM+F(K)*R0%SI(K)
+      ENDDO
+
+      FI=SUM
+
+    END SUBROUTINE
+
+!********************************************************************
+!
+!  SUBROUTINE SET_SIMP
+!  setup weights for simpson integration on radial grid
+!  any radial integral can then be evaluated by just summing all
+!  radial grid points with the weights SI
+!
+!  int dr = sum_i si(i) * f(i)
+!  the factors  R%R(K)  *R%H stem from the logarithmic grid
+!********************************************************************
+
+    SUBROUTINE SET_SIMP_R(R0)
+      IMPLICIT NONE
+!      TYPE (rgrid) R
+      TYPE(GridInfo) :: R0
+      INTEGER   K
+
+      ALLOCATE(R0%SI(R0%n))
+      R0%SI=0
+      DO K=R0%n,3,-2
+         R0%SI(K)=    R0%R(K)  *R0%H/3.d0+R0%SI(K)
+         R0%SI(K-1)=4*R0%R(K-1)*R0%H/3.d0
+         R0%SI(K-2)=  R0%R(K-2)*R0%H/3.d0
+      ENDDO
+    END SUBROUTINE
+!#endif
 
 END MODULE gridmod

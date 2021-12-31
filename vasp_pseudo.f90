@@ -33,7 +33,8 @@
          REAL(q), ALLOCATABLE :: PotHr(:), PotXCr(:), PotAEr(:), PotAECr(:)
          REAL(q), ALLOCATABLE :: Pot_eff(:), Pot_teff(:)
          REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
-         REAL(q), ALLOCATABLE :: POTAE_TEST(:)
+         REAL(q), ALLOCATABLE :: RHOPS_TEST(:)
+         REAL(q), ALLOCATABLE :: POTPSC_TEST(:), POTAE_TEST(:), PSP_TEST(:,:)
          REAL(q), ALLOCATABLE :: pdensity(:), den(:) ,cpdensity(:)
          INTEGER :: nbase, N, irc, irc_core, irc_shap
          REAL(q) :: Q_00 , Q_00c,tq
@@ -85,6 +86,7 @@
         IU18 = 22
         IU20 = 24
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  CHECK FROM VASP !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
          Call RD_PSEUDO(INFO, P, NTYP, NTYPD, LDIM, LDIM2, LMDIM, POMASS,     &
      &                  RWIGS, TYPE,                       &
      &                  CHANNELS, IU0, IU6, -1, LPAW)
@@ -141,7 +143,9 @@
 !      WRITE(6,*) 'LYMAX=', LYMAX
       ALLOCATE(RHO(PP%R%NMAX, LMMAX,1), V(PP%R%NMAX, LMMAX,1), RHOAE00(PP%R%NMAX))
       ALLOCATE(POT(PP%R%NMAX, LMMAX,1), POTAEC(PP%R%NMAX))
-      ALLOCATE(POTAE_TEST(PP%R%NMAX))
+      ALLOCATE(PSP_TEST(NPSPTS,5))
+      ALLOCATE(POTAE_TEST(PP%R%NMAX), POTPSC_TEST(PP%R%NMAX))
+      ALLOCATE(RHOPS_TEST(PP%R%NMAX))
 !      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
       ALLOCATE(CRHODE(LDIM,LDIM))
 !      ALLOCATE(CRHODE(LDIM,LDIM), POT-AE(PP%R%NMAX))
@@ -290,22 +294,15 @@
 !      POT=0
 !      CALL VASP_POT(RHO, 0, PP%R, POT, PP%RHOPS)
 
-      WRITE(6,*) 'VALUE=', PP%ZVALF
-      WRITE(6,*) 'NPSPTS=', NPSPTS
-      WRITE(6,*) 'PSGMAX=', PP%PSGMAX
-      WRITE(6,*) 'NMAX=', PP%R%NMAX
-
       OPEN(UNIT=23,FILE='VASP_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=23,FILE='VASP_POTPSC',STATUS='OLD')
       ENDIF
 
-!      CALL POTTORHO( 0.0, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
-!                 .TRUE. , PP%R%NMAX, PP%R%R ,  PP%POTPSC )                        
 
           DO j=1, PP%R%NMAX
 !             WRITE(IU19,'(4f20.8)') PP%R%R(j), PP%R%R(j)*PP%POTPSC(j)/RYTOEV/AUTOA
-             WRITE(IU19,'(4f20.8)') PP%R%R(j), PP%POTPSC(j)!, PP%POTAE(j), PP%POTPS(j)
+             WRITE(IU19,'(2f20.8)') PP%R%R(j), PP%POTPSC(j)!, PP%POTAE(j), PP%POTPS(j)
 !             WRITE(IU19,'(4f20.8)') PP%R%R(j), PP%POTPSC(j)+PP%POTPS(j)
           ENDDO
 
@@ -313,15 +310,50 @@
 !             WRITE(IU19,*) PP%PSDMAX
 !             WRITE(IU19,*)
 
-!!      CALL FOURPOT_TO_Q( PP%RDEP, POT, PP%PSP(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
-!      PP%PSP_TEST(:,2) = 0.0
-!      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), PP%POTPSC, PP%PSP_TEST(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
 
-!          DO j=1, SIZE(PP%PSP,1)
-!             WRITE(IU19,'(4f20.8)') PP%PSP(j,2), -PP%PSP_TEST(j,2)
-!          ENDDO
+!      WRITE(6,*) 'VALUE=', PP%ZVALF
+!      WRITE(6,*) 'NPSPTS=', NPSPTS
+!      WRITE(6,*) 'PSGMAX=', PP%PSGMAX
+!      WRITE(6,*) 'NMAX=', PP%R%NMAX
+
+!!!!!!!!!!!  CHECKING_FOR_POTPSC_TO_PSP_TO_POTPSC !!!!!!!!!!!!!!!!!!!!!!!!!
+!      DO I = 1,PP%R%NMAX
+!!        WRITE(360,'(4f20.8)') PP%R%R(I), PP%POTPSC(I), POTPSC_TEST(I)
+!         WRITE(350,'(2f20.8)') PP%R%R(I), PP%POTPSC(I)
+!      ENDDO
+
+!      PSP_TEST(:,2) = 0.0
+!      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), PP%POTPSC, PSP_TEST(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU0)
+!
+!      DO I = 1, SIZE(PP%PSP,1)
+!!        WRITE(360,'(4f20.8)') PP%R%R(I), PP%POTPSC(I), POTPSC_TEST(I)
+!         WRITE(360,'(3f20.8)') PP%PSP(I,1), PSP_TEST(I,2), PP%PSP(I,2) 
+!      ENDDO
+!
+!      CALL POTTORHO( PP%ZVALF, SIZE(PP%PSP,1), PSP_TEST(:,2), PP%PSGMAX/SIZE(PP%PSP,1), &
+!                 .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_TEST )                        
+!
+!      DO I = 1, PP%R%NMAX
+!         WRITE(360,'(2f20.8)') PP%R%R(I), -POTPSC_TEST(I)
+!      ENDDO
+
+!!!!!!!!!!!  CHECKING_FOR_PSP_TO_POTPSC_TEST_TO_PSP !!!!!!!!!!!!!!!!!!!!!!!!!
+!      DO j=1, SIZE(PP%PSP,1)
+!         WRITE(350,'(2f20.8)') PP%PSP(j,1), PP%PSP(j,2)
+!      ENDDO
+!      CALL POTTORHO( PP%ZVALF, SIZE(PP%PSP,1), PP%PSP(:,2), PP%PSGMAX/SIZE(PP%PSP,1), &
+!                 .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_TEST )                        
+!      DO j=1, PP%R%NMAX
+!         WRITE(370,'(3f20.8)') PP%R%R(j), PP%POTPSC(j), POTPSC_TEST(j)
+!      ENDDO
+!      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), POTPSC_TEST, PSP_TEST(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU0)
+!      DO j=1, SIZE(PP%PSP,1)
+!         WRITE(360,'(2f20.8)') PP%PSP(j,1), -PSP_TEST(j,2)
+!      ENDDO
+!
 !      STOP
-
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! END OF CHECK FROM VASP !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+          
 !!        WRITE(6,*) 'N=', Grid0%n
       ALLOCATE(PotHr(Grid0%n), PotXCr(Grid0%n), PotAEr(Grid0%n), PotAECr(Grid0%n))
       ALLOCATE(Pot_eff(Grid0%n), Pot_teff(Grid0%n))
@@ -359,6 +391,7 @@
           DO j=1,Grid0%n 
              WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAEr(j)/Grid0%r(j)*RYTOEV! , Pot_teff(j)!*SCALE*RYTOEV   !!  POT_EFF
 !             WRITE(6,*) Grid0%r(j)*AUTOA, Pot_AE%rv(j), Pot_teff(j)!*Grid0%r(j)!*SCALE*RYTOEV   !!  POT_EFF
+             WRITE(380,*) Grid0%r(j)*AUTOA, (-Pot_AE%rv(j)+Pot_AE%rvn(j))/Grid0%r(j)*RYTOEV               !!  POT_CORE
           ENDDO
 !          STOP   !! POTAE TEST CORRECT
 
@@ -429,10 +462,10 @@
          ENDDO
          call SetPOT_TEFF(Grid0, Pot_eff, Pot_teff)
          
-          DO j=1,Grid0%n 
+!          DO j=1,Grid0%n 
 !             WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAEr(j)/Grid0%r(j)*RYTOEV! , Pot_teff(j)!*SCALE*RYTOEV   !!  POT_EFF
-             WRITE(6,*) Grid0%r(j)*AUTOA, Pot_eff(j), Pot_teff(j)!*Grid0%r(j)!*SCALE*RYTOEV   !!  POT_EFF
-          ENDDO
+!             WRITE(6,*) Grid0%r(j)*AUTOA, Pot_eff(j), Pot_teff(j)!*Grid0%r(j)!*SCALE*RYTOEV   !!  POT_EFF
+!          ENDDO
 
 !!!!!!!!!! PSEUDO Calculations !!!!!!!!!!!!!!!!!!!!         
 !         nbase=PAW%nbase
@@ -517,17 +550,19 @@
 !            call SetPOT(Grid0, PAW%tcore, pdensity, PotHr, PotXCr, .FALSE.)
             call SetPOT(Grid0, PAW%tcore, pdensity, PotHr, PotXCr, .FALSE., LXCADD=.TRUE.)
 !            call SetPOT(Grid0, cpdensity, pdensity, PotHr, PotXCr, .FALSE.)
-
             DO j=1,Grid0%n 
               PotPS(j) = -(PotHr(j)+PotXCr(j))
             ENDDO
 
-!!!!!!!!!!!!!!!!!!!  POT_PSC = POT_tVEFF - Pot_PS  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!! Method_1: POT_PSC = POT_tVEFF - Pot_PS  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !           call SetPOT(Grid0,PAW%tcore, pdensity , PotHr, PotXCr, .FALSE.)
             DO j =1, Grid0%n
               PotPSC(j)= Pot_teff(j)+PotPS(j)/Grid0%r(j)
             ENDDO
+
+!!   ---------------- Method_2: POTPSC FROM POTAEC IN REAL ----------------------
+!            call SetPOT_TEFF(Grid0, PotAECr/Grid0%r, PotPSC)
 
          OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
          OPEN(UNIT=24,FILE='ATOM_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
@@ -541,10 +576,29 @@
              WRITE(IU20,*) Grid0%r(j)*AUTOA, PotPSC(j)*RYTOEV
           ENDDO
 
+          CALL SET_SIMP_R(Grid0)
+          DO j=1, Grid0%n
+             WRITE(350,*) Grid0%r(j)*AUTOA, Pot_eff(j)*RYTOEV, Pot_teff(j)*RYTOEV
+          ENDDO
 
-!!   ---------------- POTAEC IN REAL ----------------------
-!            call SetPOT_TEFF(Grid0, PotAECr, PotPSC)
+      CALL POTTORHO( PP%ZVALF, SIZE(PP%PSP,1), PP%PSP(:,2), PP%PSGMAX/SIZE(PP%PSP,1), &
+                 .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_TEST )                        
+      DO j=1, PP%R%NMAX
+         WRITE(370,'(3f20.8)') PP%R%R(j), PP%POTPSC(j), -POTPSC_TEST(j)
+      ENDDO
 
+!!      CALL FOURPOT_TO_Q( PP%RDEP, POT, PP%PSP(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
+!      PP%PSP_TEST(:,2) = 0.0
+
+!      CALL FORPOT_TO_Q(Grid0%r(Grid0%n), Pot_teff(:)*RYTOEV, PSP_TEST(:,2),  &
+!     &                SIZE(PP%PSP,1), PP%PSGMAX/SIZE(PP%PSP,1), Grid0)
+!
+      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), -POTPSC_TEST, PSP_TEST(:,2), SIZE(PP%PSP,1), PP%PSGMAX/SIZE(PP%PSP,1), PP%R, IU0)
+
+          DO j=1, SIZE(PP%PSP,1)
+             WRITE(360,'(4f20.8)') PP%PSP(j,1), PSP_TEST(j,2), PP%PSP(j,2)
+             WRITE(390,'(4f20.8)') PP%PSP(j,1), PP%PSPCOR(j)
+          ENDDO
 
          STOP
 
@@ -1197,5 +1251,165 @@
 !
       END SUBROUTINE SET_PAW_AUG
 
+
+!*******************************************************************
+!     FOURCHECK
+!     the subroutine performes a FFT of the local pseudopotential
+!     V(q) =
+!        4 \pi /q \int sin(qr) V(r) r dr
+!
+!     Parameter
+!     MD          number of points used for calculating V(q->0)
+!     DELQL       step-size for VLQ
+!     RMAX        behind RMAX V(r) is set to zero
+!
+!*******************************************************************
+
+      SUBROUTINE FORPOT_TO_Q( RDEP_IN, VL, PSP, NQL, DELQL, Grid2)
+      USE prec
+!      USE constant
+      USE radial
+      USE gridmod
+      IMPLICIT NONE
+
+      TYPE(GridInfo) :: Grid2
+!      TYPE(rgrid) RGRD
+      REAL(q) RDEP_IN       ! outermost matching point 
+                            ! potential is set to zero outside this point
+      REAL(q) VL(Grid2%n) ! potential in real space
+      INTEGER NQL           ! number of grid points in local potential
+      REAL(q) PSP(NQL)      ! on entry: old local potential in reciprocal space
+                            ! on exit: new local potential in reciprocal space
+      REAL(q) DELQL         ! step in reciprocal space
+!      INTEGER IU6           ! IO unit for output
+!     work arrays
+      INTEGER NMAX          ! number of grid points
+      REAL(q) RMAX          ! outermost point for integration
+      REAL(q) RDEP          ! actual matching point 
+      INTEGER, PARAMETER :: NFFT=32768
+      REAL(q) :: FAKT, R, SUM, RMAXF, D1, D2, DD, QQ, VRMAX, WINDOW
+!      REAL(q) :: VR(RGRD%NMAX),WRK(RGRD%NMAX,5)
+      REAL(q) :: VR(Grid2%n),WRK(Grid2%n,5)
+      REAL(q) :: VLQ(NQL)
+      REAL(q) :: VQ1(NFFT),VQ2(NFFT),VQ3(NFFT)
+      INTEGER :: K, I 
+      REAL(q), EXTERNAL :: ERRF
+
+! outermost point equal outermost grid point
+!      NMAX=RGRD%NMAX
+      NMAX=Grid2%n
+!      RMAX=RGRD%R(NMAX)
+      RMAX=Grid2%R(NMAX)*AUTOA
+
+!
+! find potential at matching point (RDEP) if supplied
+! 
+      VRMAX=0
+      DO K=1,NMAX-1
+!         IF (RDEP_IN>0 .AND.  RGRD%R(K)-RDEP_IN > -5E-3) EXIT 
+         IF (RDEP_IN>0 .AND.  Grid2%r(K)*AUTOA-RDEP_IN > -5E-3) EXIT 
+      END DO
+!      RDEP =RGRD%R(K)
+      RDEP =Grid2%r(K)*AUTOA
+      VRMAX=VL(K)
+
+      DO K=1,NMAX
+!         R =RGRD%R(K)
+         R =Grid2%r(K)*AUTOA
+         WRK(K,1)=R
+! I think the hard window is better defined
+! if the xc functional does not change, the difference
+! between the potentials goes to zero smoothly anyhow
+! so the hard window is fine and exact in that case.
+! 
+!#define hardwindow
+!#ifdef hardwindow
+!         IF (RDEP_IN>0 .AND.  R-RDEP_IN > -5E-3) THEN
+!            VL(K)=0
+!            WRK(K,2)=0
+!         ELSE
+!            VL(K)=VL(K)-VRMAX
+!            WRK(K,2)=VL(K)*R
+!         ENDIF
+!#else
+         ! window falls off to 0.5E-2 at RDEP 
+         WINDOW=(1-ERRF(5*(R-RDEP/1.6)/RDEP))/2
+         VL(K)=VL(K)*WINDOW
+         WRK(K,2)=VL(K)*R
+!#endif
+!         WRITE(77,'(3E15.6)') WRK(K,1),WRK(K,2),WINDOW
+      END DO
+      CALL SPLCOF(WRK,SIZE(VL),SIZE(VL),1E30_q)
+
+!----------------------------------------------------------------------
+! limit q-> 0   using simpson integration
+!----------------------------------------------------------------------
+      DO K=1,NMAX
+!         VR(K)=WRK(K,2)*RGRD%R(K)
+         VR(K)=WRK(K,2)*Grid2%r(K)*AUTOA
+      ENDDO
+
+      CALL SIMPI_R(Grid2, VR, SUM)
+
+!      WRITE(6,*) 'TEST_SUM=', SUM*AUTOA
+!
+!      SUM = integrator(Grid2, VL*Grid2%r**2)
+!      WRITE(6,*) 'TEST_SUM=', SUM/RYTOEV*2
+      VLQ(1)= 4._q*PI0*SUM*AUTOA
+!----------------------------------------------------------------------
+! FFT with  NFFT NFFT/2 und NFFT/4 points
+!----------------------------------------------------------------------
+      RMAXF = 2._q*PI0/DELQL
+
+!      CALL WFSINT(RMAXF, RMAX, NFFT/4, WRK, RGRD%NMAX, VQ1)
+      CALL WFSINT(RMAXF, RMAX, NFFT/4, WRK, Grid2%n, VQ1)
+!      CALL WFSINT(RMAXF, RMAX, NFFT/2, WRK, RGRD%NMAX, VQ2)
+      CALL WFSINT(RMAXF, RMAX, NFFT/2, WRK, Grid2%n, VQ2)
+!      CALL WFSINT(RMAXF, RMAX, NFFT/1, WRK, RGRD%NMAX, VQ3)
+      CALL WFSINT(RMAXF, RMAX, NFFT/1, WRK, Grid2%n, VQ3)
+
+!-----error estimation
+      D1=0
+      D2=0
+      DO I=1,NQL
+         D1=D1+ABS(VQ3(I)-VQ1(I))
+         D2=D2+ABS(VQ3(I)-VQ2(I))
+      ENDDO
+
+!-----set VLQ (returned array)
+      DO I=2,NQL
+         QQ=DELQL*(I-1)
+         VLQ(I)=VQ3(I)*4._q*PI0/QQ
+      ENDDO
+
+!      DO I=1,NQL
+!         WRITE(77,'(4F14.7)') DELQL*(I-1), VLQ(I), PSP(I), PSP(I)-VLQ(I)
+!      ENDDO
+
+      PSP=PSP-VLQ
+!----------------------------------------------------------------------
+! write out report
+!----------------------------------------------------------------------
+!      IF (IU6>=0) THEN
+         WRITE(6,1) RDEP,VRMAX,NFFT,RMAXF,RMAXF/NFFT,DELQL
+
+         FAKT = 4*PI0
+         WRITE(6,'(A,E10.3,A)')' difference to FFT with N/2= ',D2/NQL*FAKT
+         WRITE(6,'(A,E10.3,A)')' difference to FFT with N/4= ',D1/NQL*FAKT
+         DD = D2/D1
+         WRITE(6,'(A,E10.3,A/)')' estimated error in     v(q)= ',D2*DD/(1-DD)/NQL*FAKT,' 1/q'
+!
+    1 FORMAT( /' redefinition  of local potential',/ &
+     &       ' ---------------------------------------', &
+     &       ' cutoff radius for potential RDEP =',F9.2/ &
+     &       ' potential at matching point      =',E10.2/ &
+     &       ' number of fourier points    NFFT =',I6/ &
+     &       ' outmost radius for FFT      RMAXF=',F9.2/ &
+     &       ' distance between FFT points      =',F10.3/ &
+     &       ' distance between Q-points   DELQL=',F11.4)
+
+!      ENDIF
+      END SUBROUTINE FORPOT_TO_Q
+    
 
       END MODULE VASP_POTCAR

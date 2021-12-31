@@ -8,6 +8,11 @@ import time
 import PyGnuplot as gp 
 import numpy as np 
 
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+from PIL import Image
+from mpl_toolkits.mplot3d import Axes3D
+
 # X=np.arange(10)
 # Y=np.sin(X/(2*np.pi))
 # Z=Y**2.0
@@ -63,6 +68,62 @@ END\n  '''
       file_handle.writelines(AtomPAW_In)
       file_handle.flush()
       file_handle.close()
+
+def Get_Fig_Wave_Data(File, num_unit):
+    Data_XX = []
+    Data_YY = []
+    Data_File = open(File, 'r')
+    num = 0
+    times = -1
+    for line in Data_File:
+        Data = line.replace('\n', '').strip('').split(' ')
+#        print(Data)
+        Data = [i for i in Data if i !='']
+        mod = num % num_unit
+#        print(num)
+        if mod != (num_unit -1):
+            Data_XX.append(float(Data[0])) 
+            Data_YY.append(float(Data[1]))
+#        if (num == num_unit):
+#            break
+#        print(Data_XX, Data_YY)
+        num = num + 1
+    return Data_XX, Data_YY
+
+def Get_Fig_Potential_Data(File):
+    Data_XX = []
+    Data_YY = []
+    Data_File = open(File, 'r')
+    num = 0
+    for line in Data_File:
+        Data = line.replace('\n', '').strip('').split(' ')
+        Data = [i for i in Data if i !='']
+#        print(Data[1])
+        Data_XX.append(float(Data[0]))
+        Data_YY.append(float(Data[1]))
+        num = num + 1
+    return Data_XX, Data_YY, num
+
+def Fig_Draw(Data_XX, Data_YY, title, label_ind, xlabel, ylabel):
+    xmin = round(Data_XX[0])-0.2
+    xmax = round(Data_XX[-1])
+    
+    if (Data_YY[0] < Data_YY[-1]):
+       ymin = round(Data_YY[0])-1
+       ymax = round(Data_YY[-1])+1
+    else:
+       ymin = round(Data_YY[-1])-1
+       ymax = round(Data_YY[0])+1
+
+    plt.axis([xmin,xmax,ymin,ymax])
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.plot(Data_XX, Data_YY, label = label_ind)
+
+    plt.legend(loc='best') 
+    plt.title(title)
+    return
+
 
 def Data_Fig(Properties, type, data, name):
     TYPE = type+"-"+data
@@ -163,6 +224,20 @@ def Data_compare_Fig2(Properties, data1, data2, name):
     gp.p(Fig_name)
 
 def main():
+    XX, YY, lines = Get_Fig_Potential_Data('VASP_POTAE')
+    xlabel = 'Radial /A'
+    ylabel = 'Potential'
+    Fig_Draw(XX, YY, 'VASP_POTAE', 'Potential', xlabel, ylabel)
+
+    XX, YY = Get_Fig_Wave_Data('ATOM_WAE', 2002)
+    xlabel = 'Radial /A'
+    ylabel = 'Wavefunction'
+    Fig_Draw(XX, YY, 'WAE', 'wavefunction', xlabel, ylabel)
+
+#    plt.savefig(local_DOS_fig)
+    plt.show()
+    exit(0)
+
     Write_Atom_in('Si', 14)
 
     os.system("~/Softs/atompaw_test/src/atompaw < in > out")
