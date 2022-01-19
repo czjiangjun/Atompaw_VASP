@@ -33,10 +33,10 @@
          REAL(q), ALLOCATABLE :: PotHr(:), PotXCr(:), PotAEr(:), PotAECr(:)
          REAL(q), ALLOCATABLE :: Pot_eff(:), Pot_teff(:)
          REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
-         REAL(q), ALLOCATABLE :: POTAE_TEST(:)
+         REAL(q), ALLOCATABLE :: POTAE_EFF(:), DPOTAE_EFF(:), POTPS_EFF(:)
          REAL(q), ALLOCATABLE :: pdensity(:), den(:) ,cpdensity(:)
          INTEGER :: nbase, N, irc, irc_core, irc_shap
-         REAL(q) :: Q_00 , Q_00c,tq
+         REAL(q) :: Q_00 , Q_00c, tq, alpha, beta
          TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
          TYPE(potcar), POINTER :: PP
          TYPE(INFO_STRUCT) :: INFO
@@ -44,11 +44,12 @@
 !         TYPE(PseudoInfo) :: PAW
 
          INTEGER :: ifinput,ifen,Z
-         INTEGER :: NTYP, NTYPD, LDIM, LDIM2, LMDIM,CHANNELS, LMAX, LMMAX, LI
+         INTEGER :: NTYP, NTYPD, LDIM, LDIM2, LMDIM,CHANNELS, LMAX, LMMAX, LI, MI, LMI
          INTEGER :: LMAX_TABLE, LYMAX 
          REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
+         REAL(q) ROOT(2), QR, Qloc
          REAL(q) :: DHARTREE, QCORE,SCALE, DOUBLEAE, EXCG
-         REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOV(:)
+         REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOPS00(:)
          REAL(q), ALLOCATABLE :: POTAEC(:)
          REAL(q), ALLOCATABLE :: CRHODE(:,:)
          REAL(q), ALLOCATABLE :: RHOLM(:), DLM(:)
@@ -139,39 +140,135 @@
       
       CALL SET_PAW_AUG(NTYPD, PP, IU6, PP%LMAX_CALC, .TRUE.)
 !      WRITE(6,*) 'LYMAX=', LYMAX
-      ALLOCATE(RHO(PP%R%NMAX, LMMAX,1), V(PP%R%NMAX, LMMAX,1), RHOAE00(PP%R%NMAX))
+      ALLOCATE(RHO(PP%R%NMAX, LMMAX,1), V(PP%R%NMAX, LMMAX,1))
+      ALLOCATE(RHOPS00(PP%R%NMAX), RHOAE00(PP%R%NMAX))
       ALLOCATE(POT(PP%R%NMAX, LMMAX,1), POTAEC(PP%R%NMAX))
-      ALLOCATE(POTAE_TEST(PP%R%NMAX))
+      ALLOCATE(POTAE_EFF(PP%R%NMAX),DPOTAE_EFF(PP%R%NMAX), POTPS_EFF(PP%R%NMAX) )
 !      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
       ALLOCATE(CRHODE(LDIM,LDIM))
 !      ALLOCATE(CRHODE(LDIM,LDIM), POT-AE(PP%R%NMAX))
       ALLOCATE(RHOLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
       ALLOCATE(DLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
-      RHO = 0
 !
 
 !
-!!!!!!!!!!!!!    RELATION BETWEEN PP%WAE and RHO_V:   \int PP%WAE**2 dR = \int RHO_V*SCALE dR   !!!!!!
-!TEST FOR \int PP%WAE**2 dR
-!      DO io =1,CHANNELS
-!         LI = PP%LPS(io)
-!         WRITE(6,*) 'OCC1=', PP%QATO(io,io)
-!         RHOAE00(:) = RHOAE00(:)+PP%WAE(:,io)**2*PP%QATO(io,io)*(2*LI+1)
-!      ENDDO
+      LMAX_TABLE=6; CALL YLM3ST_(LMAX_TABLE)
+! CRHODE is n_ij (n_occ)    # 价电子轨道的占据数
+      CALL SET_CRHODE_ATOM(CRHODE,PP)
+! RHOLM is f_LM            #  价电子占据数构造 f_LM
+      CALL TRANS_RHOLM(CRHODE, RHOLM, PP)
+! RHO is density of valence # 价电子密度 n_lm^v = f_LM\langle\ps_i|\psi_j\rangle
+      RHO = 0
+      CALL RAD_CHARGE(RHO(:,:,1), PP%R, RHOLM(:),PP%LMAX, PP%LPS, PP%WAE)
+      RHOAE00 = 0
+      DO i =1,CHANNELS
+         LI = PP%LPS(i)
+         DO MI = 1, 2*LI+1
+            LMI = LI*LI + MI
+!           WRITE(6,*) 'TRHOV=', RHO(PP%R%NMAX, LI+1,1)
+            RHOAE00(:) = RHOAE00(:)+RHO(:,LMI,1)
+         ENDDO
+      ENDDO
 !      CALL SIMPI(PP%R,RHOAE00, QTEST)
 !      WRITE(6,*) 'QTEST=', QTEST
-!
-      LMAX_TABLE=6; CALL YLM3ST_(LMAX_TABLE)
-      CALL SET_CRHODE_ATOM(CRHODE,PP)
-      CALL TRANS_RHOLM(CRHODE, RHOLM, PP)
-      CALL RAD_CHARGE(RHO(:,:,1), PP%R, RHOLM(:),PP%LMAX, PP%LPS, PP%WAE)
+
+!!!!!!!!! POTAE = V_H[n_v]+V_XC[n_v+n_c] != POTAEC  !!!!!!!!!     
+!      POT = 0
+!      POTAEC = 0
+!!      RHO = 0
+!      CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
+!      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
+!                   RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+!      POTAE_TEST(:) = POT(:,1,1)
+
+!!!!!!!!!!!!!!!!!!!!!!!! POTAEC = V_H[n_Zc] = V_H[n_c]+ Z/r !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!! POTAEC calected undirected !!!!!!!!!!!!!!!!!!!!
+!      RHO(:,1,1) = RHO(:,1,1)+PP%RHOAE(:) 
+!      POT = 0
+!      CALL VASP_POT(RHO,14, PP%R, POT) !
+!!!!!! V_H[n_Zc] = V_H[n_c+n_v]+Z/r+V_XC[n_c+n_v] - V_H[n_v]-V_XC[n_c+n_v]
+!      POTAEC(:) = POT(:,1,1)-POTAE_TEST(:)
+
+!!!!!!!!! POTAEC calculated Directed !!!!!!!!!
+      Z=INT(PP%ZVALF_ORIG+QCORE)
+
+      CALL RAD_POT_HAR(0, PP%R, POTAEC, PP%RHOAE, DHARTEE)
+!      DO j =1, PP%R%NMAX
+!       WRITE(6,*) POTAEC(j)
+!      ENDDO
+!      WRITE(6,*)
+      DO j=1, PP%R%NMAX
+         POTAEC(j) = POTAEC(j)/SCALE-FELECT/PP%R%R(j)*Z
+      ENDDO
+
+!!!!!!!!!!!!!!!!!!!!!!!! POTAE_EFF = V_H[n_v+n_Zc] +V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!
+!      POTAE_TEST = 0
+!      POT = 0
+!      POTAEC(:) = POTAEC(:)/SCALE
+      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
+                   RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+      POTAE_EFF(:) =  POT(:,1,1)
+
+!!!!!!!!!!!!!!!!!!!!!!!! POTPS_EFF = A*sin(qloc*r)/r !!!!!!!!!!!!!!!!!!!!!!!!!!!
+      CALL GRAD(PP%R, POTAE_EFF, DPOTAE_EFF)
+
+      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAE_EFF(PP%R%NMAX)
+!      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
+      beta = 1.0
+
+      CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
+!      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
+      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
+      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
+      WRITE(6,*) 'alpha=' , alpha
+      DO j = 1, PP%R%NMAX
+         QR = Qloc*PP%R%R(j)
+         POTPS_EFF(j) = alpha*sin(QR)/PP%R%R(j)
+         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
+      ENDDO
+
+
+      STOP
+
+      OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='OLD')
+      ENDIF
+
+          DO j=1, PP%R%NMAX
+!             WRITE(IU15,'(4f20.8)') PP%R%R(j), PP%POTAE(j), POT(j,1,1)-POTAE_TEST(j), POTAEC(j)
+             WRITE(IU15,'(4f20.8)') PP%R%R(j), PP%POTAE(j) !,  POT(j,1,1)
+!             WRITE(IU15,'(4f20.8)') PP%R%R(j), POT(j,1,1) !,POTAE_TEST(j)
+          ENDDO
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      RHO = 0
+      CALL RAD_CHARGE(RHO(:,:,1), PP%R, RHOLM(:),PP%LMAX, PP%LPS, PP%WPS)
+! RHO is \tilde RHO + \hat n
       CALL RAD_AUG_CHARGE(  RHO(:,:,1), PP%R, RHOLM, PP%LMAX, PP%LPS,  &
               LYMAX, PP%AUG, PP%QPAW )
+
+      RHOPS00 = 0
+      DO i =1,CHANNELS
+         LI = PP%LPS(i)
+         DO MI = 1, 2*LI+1
+            LMI = LI*LI + MI
+!           WRITE(6,*) 'TRHOV=', RHO(PP%R%NMAX, LI+1,1)
+            RHOPS00(:) = RHOPS00(:)+RHO(:,LMI,1)
+         ENDDO
+      ENDDO
+      CALL SIMPI(PP%R,RHOPS00, QTEST)
+!      WRITE(6,*) 'QTEST=', QTEST
+
 
       OPEN(UNIT=25,FILE='VASP_VAL',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=25,FILE='VASP_VAL',STATUS='OLD')
       ENDIF
+
 !TEST FOR \int PP%RHO_V*SCALE dR
 !         DO j=1, PP%R%NMAX
 !             WRITE(25,*) PP%R%R(j), RHOAE00(j), RHO(j,1,1)*SCALE
@@ -185,7 +282,6 @@
 !!!!!!!!! RHO(:) = RHOAE(:) + RHO_V(:) !!!!!!!!!
 !      RHO(:,1,1)=RHOAE00(:)+PP%RHOAE(:)
 
-      Z=INT(PP%ZVALF_ORIG+QCORE)
 !      CALL POT(RHO, Z, PP%R, V)
 !      RHO(:,1,1)=RHOAE00(:)
 
@@ -200,66 +296,11 @@
 !        STOP
 
 
-!!!!!!!!! POTAE = V_H[n_v]+V_XC[n_v+n_c] != POTAEC  !!!!!!!!!     
-      POT = 0
-      POTAEC = 0
-!      RHO = 0
-      CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
-      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-       RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
-      POTAE_TEST(:) = POT(:,1,1)
 !!!!!!!!!! VASP_POT is THE SAME AS RAD_POT !!!!!!!!!!!!!!!!!!!!!!!!!!!
 !      POTAEC = 0
 !      POT = 0
 !      CALL VASP_POT(RHO,0, PP%R, POT, PP%RHOAE, POTAEC) !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-!!!!!!!!!!!!!!!!!!!!!!!! POTAEC = V_H[n_Zc] = V_H[n_c]+ Z/r !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-!!!!!!!!!! POTAEC calected undirected !!!!!!!!!!!!!!!!!!!!
-!      RHO(:,1,1) = RHO(:,1,1)+PP%RHOAE(:) 
-!      POT = 0
-!      CALL VASP_POT(RHO,14, PP%R, POT) !
-!!!!!! V_H[n_Zc] = V_H[n_c+n_v]+Z/r+V_XC[n_c+n_v] - V_H[n_v]-V_XC[n_c+n_v]
-!      POTAEC(:) = POT(:,1,1)-POTAE_TEST(:)
-
-!!!!!!!!! POTAEC calculated Directed !!!!!!!!!
-      CALL RAD_POT_HAR(0, PP%R, POTAEC, PP%RHOAE, DHARTEE)
-
-!      DO j =1, PP%R%NMAX
-!       WRITE(6,*) POTAEC(j)
-!      ENDDO
-!      WRITE(6,*)
-      DO j=1, PP%R%NMAX
-         POTAEC(j) = POTAEC(j)-FELECT*SCALE/PP%R%R(j)*Z
-      ENDDO
-
-!!!!!!!!!!!!!!!!!!!!!!!! POT_EFF = V_H[n_v+n_Zc] +V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!
-!      POTAE_TEST = 0
-!      POT = 0
-!      POTAEC(:) = POTAEC(:)/SCALE
-!      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-!       RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
-!      POTAE_TEST(:) =  POT(:,1,1)
-
-      RHO(:,1,1) = RHO(:,1,1)+PP%RHOAE(:) 
-      POT = 0
-      CALL VASP_POT(RHO,14, PP%R, POT) !
-
-!      CALL VASP_POT(RHO, 0, PP%R, V2, PP%RHOAE)
-!      CALL VASP_POT(RHO, 0, PP%R, V, PP%RHOAE)
-
-      OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
-      IF (IERR/=0) THEN
-         OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='OLD')
-      ENDIF
-
-
-          DO j=1, PP%R%NMAX
-!             WRITE(IU15,'(4f20.8)') PP%R%R(j), PP%POTAE(j), POT(j,1,1)-POTAE_TEST(j), POTAEC(j)
-             WRITE(IU15,'(4f20.8)') PP%R%R(j), PP%POTAE(j) !,  POT(j,1,1)
-!             WRITE(IU15,'(4f20.8)') PP%R%R(j), POT(j,1,1) !,POTAE_TEST(j)
-          ENDDO
 
 !!!!!!!!!!!!! POTPS = V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c] !!!!!!!!!!!!!!!!!!!!!!!!
       RHO = 0
@@ -320,7 +361,6 @@
 !          DO j=1, SIZE(PP%PSP,1)
 !             WRITE(IU19,'(4f20.8)') PP%PSP(j,2), -PP%PSP_TEST(j,2)
 !          ENDDO
-!      STOP
 
 !!        WRITE(6,*) 'N=', Grid0%n
       ALLOCATE(PotHr(Grid0%n), PotXCr(Grid0%n), PotAEr(Grid0%n), PotAECr(Grid0%n))
@@ -555,7 +595,7 @@
 
 !        deallocate(coreden)
       DEALLOCATE(RHO, V, RHOAE00, CRHODE, RHOLM)
-      DEALLOCATE(POT, POTAE_TEST, POTAEC)
+      DEALLOCATE(POT, POTAE_EFF, DPOTAE_EFF, POTAEC)
       DEALLOCATE(PotHr, PotXCr, PotAEr,PotAECr, PotPS, PotAE, PotAE00,  PotPSC)
       DEALLOCATE(pdensity, PotPSCr)
         CLOSE(IU6)
@@ -1197,5 +1237,49 @@
 !
       END SUBROUTINE SET_PAW_AUG
 
+      SUBROUTINE SOLVEBESL_Q(ROOT, alpha, beta, L, NQ)
+        USE radial
+
+        IMPLICIT REAL(q) (A-H,O-Z)
+        TYPE (rgrid) R
+        INTEGER,INTENT(IN) :: L, NQ
+        REAL(q),INTENT(IN) :: alpha, beta
+        REAL(q),INTENT(OUT) :: ROOT(NQ)
+
+        REAL(q),PARAMETER :: Dh=1.D-2, tol=1.D-14
+
+        INTEGER :: NROOT
+        REAL(8) :: dum,y1,y2,jbes,jbesp,QR,QX,hh
+
+        QR = Dh; NROOT = 0
+        DO WHILE (NROOT < NQ)
+           CALL SBESSE3(QR, BJ, BJP, BJPP, L)
+           y1 = alpha*BJ + beta*QR*BJP
+           QR = QR + Dh
+           CALL SBESSE3(QR, BJ, BJP, BJPP, L)
+           y2 = alpha*BJ + beta*QR*BJP
+
+           DO WHILE( y1*y2 >= 0.D0)
+              QR = QR + Dh
+              CALL SBESSE3(QR, BJ, BJP, BJPP, L)
+              y2 = alpha*BJ + beta*QR*BJP
+          ENDDO
+
+          hh = Dh; QX = QR
+          DO WHILE (hh > tol)
+             hh = 0.5D0*hh
+             IF(y1*y2 < 0) THEN
+                     QX = QX - hh
+             ELSE
+                     QX = QX + hh
+             ENDIF
+             CALL SBESSE3(QX, BJ, BJP, BJPP, L)
+              y2 = alpha*BJ + beta*QR*BJP
+          ENDDO
+          NROOT = NROOT+1
+          ROOT(NROOT) = QX
+        ENDDO
+        
+      END SUBROUTINE SOLVEBESL_Q
 
       END MODULE VASP_POTCAR
