@@ -332,19 +332,22 @@
       ENDIF
           WRITE(6,*) 'AEPOT calcualted'
 
-!!!!!!!!! POTAE_TOT = V_Z+V_H[n_c+n_v]+V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!     
-!!!!!!!!! POTAE_TOT ===> Pot_AE%rv
+!!!!!!!!! POTAE_EFF = V_Z+V_H[n_c+n_v]+V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!     
+!!!!!!!!! POTAE_EFF ===> Pot_AE%rv
 
 !!!!!!!!! POTAEC = V_Z + V_H[n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
           den = 0.d0
           call SetPOT(Grid0, FC%coreden, den, PotHr, PotXCr, .TRUE.)
-          PotAECr(:) = PotHr(:)+Pot_AE%rvn(:)
+          PotAECr(:) = PotHr(:)-Pot_AE%rvn(:)
 
 !!!!!!!!! POTAE = V_H[n_v] + V_XC[n_c+n_v] !!!!!!!!!!!!!!!!!!!!!!!!!!!
+          call SetPOT(Grid0, den, FC%valeden, PotHr, PotXCr, .TRUE.)
+          PotAEr(:) = PotHr(:)+PotXCr(:)
+
 !!!! In calculation, It comes from -( POTAE_TOT - POTAEC ) !!!!!!!!!!!
 !!!!!!!!!!!!!!!      IT IS Big_Num MINUS Big_Num       !!!!!!!!!!!!!!!
 
-          PotAEr(:) = PotAECr(:)-Pot_AE%rv(:)
+!          PotAEr(:) = PotAECr(:)-Pot_AE%rv(:)
 
 !          DO j = 1, Grid0%n
 !             WRITE(6,*) Grid0%r(j)*AUTOA, PotHr(j), PotXCr(j), Pot_AE%rvn(j)
@@ -354,42 +357,43 @@
 !              WRITE(6,*) Grid0%r(j)*AUTOA, PotAEr(j)/Grid0%r(j)*RYTOEV!, Pot_AE%rv(j)/Grid0%r(j)*RYTOEV
 !          ENDDO
           DO j=1,Grid0%n 
-             WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAEr(j)/Grid0%r(j)*RYTOEV! , Pot_teff(j)!*SCALE*RYTOEV   !!  POT_EFF
-!             WRITE(6,*) Grid0%r(j)*AUTOA, Pot_AE%rv(j), Pot_teff(j)!*Grid0%r(j)!*SCALE*RYTOEV   !!  POT_EFF
+             WRITE(IU16,*) Grid0%r(j)*AUTOA, -PotAEr(j)/Grid0%r(j)*RYTOEV !!!  POT_AE
+!             WRITE(6,*) Grid0%r(j)*AUTOA, Pot_AE%rv(j)/Grid0%r(j)*RYTOEV, PotAECr(j)/Grid0%r(j)*RYTOEV  !!!  POT_EFF
+             WRITE(6,'(6f20.8)') Grid0%r(j)*AUTOA, Pot_AE%rv(j)/Grid0%r(j), PotAECr(j)/Grid0%r(j), PotAEr(j)/Grid0%r(j)  !!!  POT_EFF
           ENDDO
-!          STOP   !! POTAE TEST CORRECT
+          STOP   !! POTAE TEST CORRECT
 
 !!!!!!!!! tcore_den = sum_i B_isin(q_i r)/r !!!!!!!!!!!!!!!!!     
          Call setcoretail2(Grid0, FC%coreden)
 !!         Call setcoretail2(Grid0, coreden)
-      OPEN(UNIT=14,FILE='ATOM_CORE',STATUS='UNKNOWN',IOSTAT=IERR)
-      IF (IERR/=0) THEN
-         OPEN(UNIT=14,FILE='ATOM_CORE',STATUS='OLD')
-      ENDIF
-          DO j=1,Grid0%n 
-             WRITE(IU10,*) Grid0%r(j)*AUTOA, FC%coreden(j)*AUTOA
-          ENDDO
+         OPEN(UNIT=14,FILE='ATOM_CORE',STATUS='UNKNOWN',IOSTAT=IERR)
+         IF (IERR/=0) THEN
+            OPEN(UNIT=14,FILE='ATOM_CORE',STATUS='OLD')
+         ENDIF
+         DO j=1,Grid0%n 
+            WRITE(IU10,*) Grid0%r(j)*AUTOA, FC%coreden(j)*AUTOA
+         ENDDO
 !
-      OPEN(UNIT=16,FILE='ATOM_PCORE',STATUS='UNKNOWN',IOSTAT=IERR)
-      IF (IERR/=0) THEN
-         OPEN(UNIT=16,FILE='ATOM_PCORE',STATUS='OLD')
-      ENDIF
-          DO j=1,Grid0%n 
+         OPEN(UNIT=16,FILE='ATOM_PCORE',STATUS='UNKNOWN',IOSTAT=IERR)
+         IF (IERR/=0) THEN
+            OPEN(UNIT=16,FILE='ATOM_PCORE',STATUS='OLD')
+         ENDIF
+         DO j=1,Grid0%n 
 !             WRITE(IU12,*) Grid0%r(j)*AUTOA, PAW%tcore(j)/SCALE/AUTOA
-             WRITE(IU12,*) Grid0%r(j)*AUTOA, PAW%tcore(j)*AUTOA
-          ENDDO
+            WRITE(IU12,*) Grid0%r(j)*AUTOA, PAW%tcore(j)*AUTOA
+         ENDDO
 !            irc_core= FindGridIndex(Grid0, PAW%rc_core)
 !            Q_00 = integrator(Grid0, PAW%tcore, 1, irc_core) 
 !           write(6,*) 'Q_00 for atom ', irc, Q_00
 !
          Call SetPAWOptions2(ifinput,ifen,Grid0, Orbit,Pot_FC,success)
 
-      OPEN(UNIT=12,FILE='ATOM_WAE',STATUS='UNKNOWN',IOSTAT=IERR)
-      OPEN(UNIT=17,FILE='ATOM_WPS',STATUS='UNKNOWN',IOSTAT=IERR)
-      IF (IERR/=0) THEN
-         OPEN(UNIT=12,FILE='ATOM_WAE',STATUS='OLD')
-         OPEN(UNIT=17,FILE='ATOM_WPS',STATUS='OLD')
-      ENDIF
+         OPEN(UNIT=12,FILE='ATOM_WAE',STATUS='UNKNOWN',IOSTAT=IERR)
+         OPEN(UNIT=17,FILE='ATOM_WPS',STATUS='UNKNOWN',IOSTAT=IERR)
+         IF (IERR/=0) THEN
+            OPEN(UNIT=12,FILE='ATOM_WAE',STATUS='OLD')
+            OPEN(UNIT=17,FILE='ATOM_WPS',STATUS='OLD')
+         ENDIF
          DO i=1, PAW%nbase
           DO j=1, Grid0%n
              WRITE(IU8,*) Grid0%r(j)*AUTOA, PAW%phi(j,i)/sqrt(AUTOA)
@@ -422,14 +426,16 @@
 !!   ---------------- Method 2 ----------------------
 !!!!!!!!!!!!!!!!!!!! POT_tVeff FROM POT_EFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!     
          DO i = 1, Grid0%n
-              Pot_eff(i) = Pot_AE%rv(i)/Grid0%r(i)
+            Pot_eff(i) = Pot_AE%rv(i)/Grid0%r(i)
          ENDDO
          call SetPOT_TEFF(Grid0, Pot_eff, Pot_teff)
          
+         WRITE(6,*) 'TEST!!'
           DO j=1,Grid0%n 
 !             WRITE(IU16,*) Grid0%r(j)*AUTOA, PotAEr(j)/Grid0%r(j)*RYTOEV! , Pot_teff(j)!*SCALE*RYTOEV   !!  POT_EFF
-             WRITE(6,*) Grid0%r(j)*AUTOA, Pot_eff(j), Pot_teff(j)!*Grid0%r(j)!*SCALE*RYTOEV   !!  POT_EFF
+             WRITE(6,*) Grid0%r(j)*AUTOA, Pot_eff(j)*RYTOEV, Pot_teff(j)*RYTOEV
           ENDDO
+          STOP   !! POTPS_EFF TEST CORRECT
 
 !!!!!!!!!! PSEUDO Calculations !!!!!!!!!!!!!!!!!!!!         
 !         nbase=PAW%nbase
@@ -626,7 +632,7 @@
 !        ENDDO
 !        Grid2%n = N
 
-
+        WRITE(6,*) 'QC=', qc
 
 !        DO i = 1, Grid2%n
 !            WRITE(6, '(3f15.8)') Grid2%r(i), POTHR(i), POTXCR(i)
@@ -701,196 +707,6 @@
 
         RETURN
         END SUBROUTINE SetPOT_TEFF
-
-!*********************** SUBROUTINE POT *********************************      
-! Setup the onsite potential V (on a radial grid)
-!
-! Input
-! RHO(:,:,:) charge density, in (charge,magnetization) format 
-! Z          nuclear charge
-! R          grid
-! RHOC(:)    partial core density (optional)
-! POTC(:)    frozen core potential (optional)
-!
-! Output
-! V(:,:,:)   potential, in (charge,magnetization) format
-!************************************************************************
-      SUBROUTINE VASP_POT(RHO,Z,R,V,RHOC,VC,EXC,ADD_GGA)
-      
-      USE ini
-      USE radial
-      USE setexm
-      USE gridmod
-      
-      IMPLICIT NONE
-      
-      TYPE(rgrid) R
-      TYPE(GridInfo) :: Grid0
-      
-      INTEGER, INTENT(IN) :: Z
-      REAL(q), DIMENSION(:,:,:), INTENT(IN) :: RHO
-      REAL(q), DIMENSION(:,:,:), INTENT(OUT) :: V
-      REAL(q), DIMENSION(:), OPTIONAL, INTENT(IN) :: RHOC
-      REAL(q), DIMENSION(:), OPTIONAL, INTENT(IN) :: VC
-      REAL(q), OPTIONAL, INTENT(OUT):: EXC
-      LOGICAL, OPTIONAL, INTENT(IN) :: ADD_GGA
-! local variables
-      INTEGER ISPIN,LMAX,NMAX
-      INTEGER K,L,M,LM,ISP
-      REAL(q) SCALE,SUM,QINT,QINF
-      REAL(q), DIMENSION(:,:,:), ALLOCATABLE :: WORK1
-      REAL(q), DIMENSION(:,:),ALLOCATABLE :: WORK2
-
-      LOGICAL,PARAMETER :: TREL=.TRUE. ! use relativistic corrections to exchange
-      LOGICAL,PARAMETER :: TLDA=.TRUE. ! calculate LDA contribution seperately
-      ! TLDA=.FALSE. works only for Perdew Burke Ernzerhof
-      ! in this case non spherical contributions are missing
-      REAL(q) :: EXCG,DHARTREE,DEXC,DVXC,DEXC_GGA,DVXC_GGA,DOUBLEC
-      LOGICAL :: ADDGGA
-
-      ADDGGA=ISGGA()
-      IF (PRESENT(ADD_GGA)) ADDGGA=ADD_GGA
-      
-! get dimensions and perform some checks
-      LMAX=INT(SQRT(REAL(SIZE(RHO,2)))-1)      
-      IF (((LMAX+1)*(LMAX+1))/=SIZE(RHO,2)) THEN
-         WRITE(*,*) 'POT: LMAX and the 2nd dimension of RHO do not match:',((LMAX+1)*(LMAX+1)),SIZE(RHO,2)
-         STOP
-      ENDIF
-      IF (SIZE(V,2)<SIZE(RHO,2)) THEN
-         WRITE(*,*) 'POT: 2nd dimension of V too small',SIZE(V,2),SIZE(RHO,2)
-      ENDIF
-      ISPIN=SIZE(RHO,3)
-      IF (ISPIN/=1.AND.ISPIN/=2.AND.ISPIN/=4) THEN
-         WRITE(*,*) 'POT: ISPIN /= 1,2, or 4:',ISPIN
-         STOP
-      ENDIF
-      NMAX=SIZE(RHO,1)
-      IF (NMAX<R%NMAX) THEN
-         WRITE(*,*) 'POT: Grid inconsistency (1):',R%NMAX,NMAX
-         STOP
-      ENDIF
-      IF (PRESENT(RHOC)) THEN
-         IF (SIZE(RHOC)<R%NMAX) THEN
-            WRITE(*,*) 'POT: Grid inconsistency (2):',R%NMAX,NMAX,SIZE(RHOC)
-            STOP
-         ENDIF
-      ENDIF
-      IF (PRESENT(VC)) THEN
-         IF (SIZE(VC)<R%NMAX) THEN
-            WRITE(*,*) 'POT: Grid inconsistency (3):',R%NMAX,NMAX,SIZE(VC)
-            STOP
-         ENDIF
-      ENDIF
-
-      SCALE=2*SQRT(PI0)
-
-      V=0
-      ISPIN = 1
-
-!      IF (ISPIN==1.OR.ISPIN==2) THEN
-         ALLOCATE(WORK1(NMAX,(LMAX+1)*(LMAX+1),ISPIN),WORK2(NMAX,ISPIN))
-         WORK1=RHO
-!      ELSEIF (ISPIN==4) THEN
-!         ALLOCATE(WORK1(NMAX,(LMAX+1)*(LMAX+1),2),WORK2(NMAX,2))
-!         CALL RAD_MAG_DENSITY(RHO,WORK1,LMAX,R)
-!      ENDIF
-
-!========================================================================
-! Hartree potential
-!========================================================================
-      DHARTREE=0
-
-      DO L=0,LMAX
-      DO M=0,2*L
-         LM=L*L+M+1
-         CALL RAD_POT_HAR(L,R,V(:,LM,1),WORK1(:,LM,1),SUM)
-         DHARTREE=DHARTREE+SUM
-      ENDDO
-      ENDDO
-!      WRITE(6,*) 'DHARTREE=', DHARTREE
-!      WRITE(6,*) 'V=', V(:,1,1)
-
-!#ifdef testout
-!      ! integrate charge
-      CALL SIMPI(R,WORK1(:,1,1),QINT)
-!      ! infer integrated charge from Hartree potential
-      QINF=V(R%NMAX,1,1)*R%R(R%NMAX)/FELECT/2/SQRT(PI0)
-!      ! write
-      WRITE(*,'(A,F14.7,A,F14.7)') 'POT: Q_int=',QINT*SCALE,' Q_inf=',QINF
-!#endif      
-
-      IF (PRESENT(VC)) THEN
-         DO K=1,R%NMAX
-            V(K,1,1)=V(K,1,1)+VC(K)*SCALE
-         ENDDO
-      ENDIF
-!      IF (ISPIN==2.OR.ISPIN==4) V(:,:,2)=V(:,:,1)
-
-!========================================================================
-! add nuclear potential
-!========================================================================
-
-      DO K=1,R%NMAX
-         V(K,1,1)=V(K,1,1)-FELECT*SCALE*Z/R%R(K)
-         WRITE(77, *) R%R(K), V(K,1,1)
-      ENDDO
-!      IF (ISPIN==2.OR.ISPIN==4) V(:,1,2)=V(:,1,1)
-
-!========================================================================
-! LDA exchange correlation energy, potential
-! and double counting corrections
-!========================================================================
-      DEXC=0
-      DVXC=0
-      
-      DO ISP=1,MIN(ISPIN,2)
-         DO K=1,R%NMAX
-            WORK2(K,ISP)=WORK1(K,1,ISP)/(SCALE*R%R(K)*R%R(K))
-         ENDDO
-      ENDDO
-      ! add partial core charge if present
-      IF (PRESENT(RHOC)) THEN
-         DO K=1,R%NMAX
-            WORK2(K,1)=WORK2(K,1)+RHOC(K)/(SCALE*R%R(K)*R%R(K))
-         ENDDO
-      ENDIF
-      
- lda: IF (TLDA) THEN
-            CALL RAD_LDA_XC(R,TREL,LMAX,WORK2(:,1),WORK1(:,:,1),V(:,:,1),DEXC,DVXC,.TRUE.)
-      ENDIF lda
-!========================================================================
-! GGA if required
-!========================================================================
-      DEXC_GGA=0
-      DVXC_GGA=0
-      
-! gga: IF (ISGGA()) THEN
-  gga: IF (ADDGGA) THEN
-            CALL RAD_GGA_XC(R,TLDA,WORK2(:,1),WORK1(:,1,1),V(:,1,1),DEXC_GGA,DVXC_GGA)
-      ENDIF gga
-!========================================================================
-! done
-!========================================================================
-      ! Classical double counting correction:
-      ! E_dc = -1/2 \int rho(r) V_H[rho(r)] dr + E_xc[rho+rhoc]
-      !          -  \int rho(r) V_xc[rho(r)+rhoc(r)] dr
-!      DOUBLEC= -DHARTREE/2+DEXC-DVXC+DEXC_GGA-DVXC_GGA
-
-      EXCG= DEXC+DEXC_GGA
-      IF (PRESENT(EXC)) EXC=EXCG
-      
-      IF (ISPIN==2) THEN
-         WORK1(1:R%NMAX,:,1)=(V(1:R%NMAX,1:SIZE(RHO,2),1)+V(1:R%NMAX,1:SIZE(RHO,2),2))/2
-         WORK1(1:R%NMAX,:,2)=(V(1:R%NMAX,1:SIZE(RHO,2),1)-V(1:R%NMAX,1:SIZE(RHO,2),2))/2
-         V=WORK1
-      ENDIF
-!      IF (ISPIN==4) CALL RAD_MAG_DIRECTION(RHO,WORK1,V,LMAX,R)
-      
-      DEALLOCATE(WORK1,WORK2)
-      RETURN
-      END SUBROUTINE VASP_POT
-
 
 !*******************************************************************
 !
