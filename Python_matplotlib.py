@@ -90,7 +90,7 @@ def Get_Fig_Wave_Data(File, num_unit):
         num = num + 1
     return Data_XX, Data_YY
 
-def Get_Fig_Potential_Data(File):
+def Get_Fig_Potential_Data(File, index):
     Data_XX = []
     Data_YY = []
     Data_File = open(File, 'r')
@@ -100,7 +100,7 @@ def Get_Fig_Potential_Data(File):
         Data = [i for i in Data if i !='']
 #        print(Data[1])
         Data_XX.append(float(Data[0]))
-        Data_YY.append(float(Data[1]))
+        Data_YY.append(float(Data[index]))
         num = num + 1
     return Data_XX, Data_YY, num
 
@@ -134,10 +134,12 @@ def main():
     os.system("~/Softs/atompaw_test/src/atompaw < in > out")
     #exit ()
 
-    XX, YY, lines = Get_Fig_Potential_Data('VASP_POTAE')
+    FILE_NAME = 'VASP_POTAE'
     xlabel = 'Radial /A'
     ylabel = 'Potential'
-    Fig_Draw(XX, YY, 'VASP_POTAE', 'Potential', xlabel, ylabel)
+    for i in range(3):
+       XX, YY, lines = Get_Fig_Potential_Data(FILE_NAME, i)
+       Fig_Draw(XX, YY, FILE_NAME, 'Potential', xlabel, ylabel)
 
     XX, YY = Get_Fig_Wave_Data('ATOM_WAE', 2002)
     xlabel = 'Radial /A'
