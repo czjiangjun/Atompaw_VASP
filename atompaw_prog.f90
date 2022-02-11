@@ -98,13 +98,11 @@ PROGRAM atompaw
 
   CALL vasp_pseudo(ifinput, ifen, Grid, FCOrbit, AEPot, FCPot, OK)
 
- ! Call SetPAWOptions2(ifinput,ifen,Grid,FCOrbit,FCPot,OK)
+!  Call SetPAWOptions2(ifinput,ifen,Grid,FCOrbit,FCPot,OK)
 
 !  If (.not.OK) stop 'Stopping due to options failure'
 !  Call Report_Pseudobasis(Grid,PAW,ifen)
 
-
-  CALL Report_pseudo_energies(PAW,6)
   CALL Report_pseudo_energies(PAW,ifen)
 
 
