@@ -28,7 +28,7 @@ def Write_Atom_in(E_name, Z_Val):
       Atom = ''.join(element)
       file_handle.write(Atom)
       AtomPAW_In = ''' 
-PBE-PW  scalarrelativistic loggridv4  2001 5.07
+LDA-PW scalarrelativistic loggridv4 2001 5 1.55 loggderivrange -25. 25. 2500
 3 3 0 0 0 0
 3 1 2
 0 0 0
@@ -38,12 +38,12 @@ v
 c
 v
 1
-1.83  1.41   1.07    1.51
+1.65  1.21   1.07    1.21
 y
--0.60
+-0.60    # 能量往大调压制波函数
 n
 y
-0.22
+0.42    # 能量往大调压制波函数
 n
 vasprrkj  gramschmidtortho  Besselshape
 1 3   MTROULLIER
