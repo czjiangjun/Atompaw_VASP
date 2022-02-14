@@ -369,9 +369,9 @@
 !!!!!!!!! POTAEC = V_Z + V_H[n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
           den = 0.d0
           call SetPOT(Grid, FC%coreden, den, PotHr, PotXCr, .TRUE.)
-!!!!      VASP_V_Z = -Pot_AE%rvn(j)/Grid%r(j)*RYTOEV/(AUTOA^2*SCALE)
-!!!!      VASP_V_H[n_c] = -PotHr(j)/Grid%r(j)*RYTOEV*AUTOA^2   !!!!  FOR the factor FELECT
-          PotAECr(:) = PotHr(:) + Pot_AE%rvn(:) *AUTOA*AUTOA
+!!!!      VASP_V_Z = -Pot_AE%rvn(j)/Grid%r(j)*RYTOEV/SCALE
+!!!!      VASP_V_H[n_c] = -PotHr(j)/Grid%r(j)*RYTOEV/(AUTOA^2*SCALE)   !!!!  FOR the factor FELECT
+          PotAECr(:) = PotHr(:) + Pot_AE%rvn(:)/SCALE
 
 !!!!!!!!! POTAE = V_H[n_v] + V_XC[n_c+n_v] !!!!!!!!!!!!!!!!!!!!!!!!!!!
           call SetPOT(Grid, FC%coreden, FC%valeden, PotHr, PotXCr, .FALSE., .TRUE.)
