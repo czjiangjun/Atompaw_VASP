@@ -225,7 +225,7 @@
       DO j=1, PP%R%NMAX
          WRITE(IU15,'(8f20.8)') PP%R%R(j), PP%POTAE(j), POTAE_TEST(j),  &
      &                          (PP%POTAE(j)-POTAE_TEST(j))*PP%R%R(j),  &
-     &                          POTAE_EFF(j)
+     &                          POTAEC(j), POTAE_EFF(j)
       ENDDO
 
 !!!!!!!!!!!!!!!!!!!!!!!! POTPS_EFF = A*sin(qloc*r)/r !!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -398,8 +398,8 @@
 !          ENDDO
           DO j=1,Grid%n 
              WRITE(IU16,'(8f20.8)') Grid%r(j)*AUTOA, -PotAEr(j)/Grid%r(j)*RYTOEV, &  !!!  VASP_POT_AE
-     &                     -PotAECr(j)/Grid%r(j)*RYTOEV,    &                        !!!  VASP_POT_AEC 
-     &                     -PotATr(j)/Grid%r(j)*RYTOEV, Pot_AE%rv(j)/Grid%r(j)*RYTOEV  !!!  POTAE_EFF
+     &                     -PotAECr(j)/Grid%r(j)*RYTOEV !,    &                        !!!  VASP_POT_AEC 
+!     &                     -PotATr(j)/Grid%r(j)*RYTOEV, Pot_AE%rv(j)/Grid%r(j)*RYTOEV  !!!  POTAE_EFF
           ENDDO
 
 !!!!!!!!! tcore_den = sum_i B_isin(q_i r)/r !!!!!!!!!!!!!!!!!     
