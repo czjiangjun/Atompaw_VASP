@@ -31,7 +31,7 @@
          Type(OrbitInfo), INTENT(IN) :: Orbit
          TYPE(PotentialInfo), INTENT(IN) :: Pot_AE
          TYPE(PotentialInfo), INTENT(IN) :: Pot_FC
-         REAL(q), ALLOCATABLE :: PotHr(:), PotXCr(:), PotAEr(:), PotAECr(:)
+         REAL(q), ALLOCATABLE :: PotHr(:), PotXCr(:), PotAEr(:), PotAECr(:), PotATr(:)
          REAL(q), ALLOCATABLE :: Pot_eff(:), Pot_teff(:)
          REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
          REAL(q), ALLOCATABLE :: POTAE_EFF(:), DPOTAE_EFF(:), POTPS_EFF(:)
@@ -103,41 +103,35 @@
          OPEN(UNIT=7,FILE='VASP_WAE',STATUS='OLD')
          OPEN(UNIT=8,FILE='VASP_WPS',STATUS='OLD')
       ENDIF
-         DO i=1, CHANNELS
-          DO j=1, PP%R%NMAX
-          WRITE(IU6,*) PP%R%R(j), PP%WAE(j,i)
-!          if (mod(i,2) == 0)WRITE(IU6,*) PP%R%R(j), PP%WAE(j,i)
-          WRITE(IU7,*) PP%R%R(j), PP%WPS(j,i)
-
-          RHOAE00(j) = PP%WAE(j,i)*PP%WAE(j,i)
-          ENDDO
-          WRITE(IU6,*)
-          WRITE(IU7,*)
-
-          CALL SIMPI(PP%R,RHOAE00, QCORE)
-          WRITE(6,*) 'QCORE=', QCORE
-         ENDDO
-
+      DO i=1, CHANNELS
+        DO j=1, PP%R%NMAX
+           WRITE(IU6,*) PP%R%R(j), PP%WAE(j,i)
+!       if (mod(i,2) == 0)WRITE(IU6,*) PP%R%R(j), PP%WAE(j,i)
+           WRITE(IU7,*) PP%R%R(j), PP%WPS(j,i)
+        ENDDO
+        WRITE(IU6,*)
+        WRITE(IU7,*)
+      ENDDO
 
       OPEN(UNIT=13,FILE='VASP_CORE',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=13,FILE='VASP_CORE',STATUS='OLD')
       ENDIF
-          DO j=1, PP%R%NMAX
-             WRITE(IU9,*) PP%R%R(j), PP%RHOAE(j)
-          ENDDO
+      DO j=1, PP%R%NMAX
+         WRITE(IU9,*) PP%R%R(j), PP%RHOAE(j)
+      ENDDO
 !
       OPEN(UNIT=15,FILE='VASP_PCORE',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=15,FILE='VASP_PCORE',STATUS='OLD')
       ENDIF
-          DO j=1, PP%R%NMAX
-             WRITE(IU11,*) PP%R%R(j), PP%RHOPS(j)
-          ENDDO
+      DO j=1, PP%R%NMAX
+         WRITE(IU11,*) PP%R%R(j), PP%RHOPS(j)
+      ENDDO
 
 
-      CALL SIMPI(PP%R,PP%RHOAE, QCORE)
-      WRITE(6,*) 'QCORE=', QCORE, QCORE*SCALE
+!      CALL SIMPI(PP%R,PP%RHOAE, QCORE)
+!      WRITE(6,*) 'QCORE=', QCORE, QCORE*SCALE
 !      CALL SIMPI(PP%R,PP%RHOPS, QTEST)
 !      WRITE(6,*) 'QCORE=', QTEST, QTEST*SCALE
 
@@ -229,7 +223,9 @@
       ENDIF
 !
       DO j=1, PP%R%NMAX
-         WRITE(IU15,'(5f20.8)') PP%R%R(j), PP%POTAE(j), POTAE_TEST(j), -POTAEC(j),  POTAE_EFF(j)
+         WRITE(IU15,'(8f20.8)') PP%R%R(j), PP%POTAE(j), POTAE_TEST(j),  &
+     &                          (PP%POTAE(j)-POTAE_TEST(j))*PP%R%R(j),  &
+     &                          POTAE_EFF(j)
       ENDDO
 
 !!!!!!!!!!!!!!!!!!!!!!!! POTPS_EFF = A*sin(qloc*r)/r !!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -308,7 +304,7 @@
       ENDDO
 
 
-      WRITE(6,*) 'VALUE=', PP%ZVALF
+      WRITE(6,*) 'VALUE=', PP%ZVALF_ORIG
       WRITE(6,*) 'NPSPTS=', NPSPTS
       WRITE(6,*) 'PSGMAX=', PP%PSGMAX
       WRITE(6,*) 'NMAX=', PP%R%NMAX
@@ -329,11 +325,10 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!  UNIT IN AtomPAW  E: Ry        r: A.u. 
 
-      WRITE(6,*) 'N=', Grid%n
 !      WRITE(6,*) 'irc=', PAW%irc
 !      Grid%n = PAW%irc
-      WRITE(6,*) 'N=', Grid%n
-      ALLOCATE(PotHr(Grid%n), PotXCr(Grid%n), PotAEr(Grid%n), PotAECr(Grid%n))
+!      WRITE(6,*) 'N=', Grid%n
+      ALLOCATE(PotHr(Grid%n), PotXCr(Grid%n), PotAEr(Grid%n), PotAECr(Grid%n), PotATr(Grid%n))
       ALLOCATE(Pot_eff(Grid%n), Pot_teff(Grid%n))
       ALLOCATE(PotAE00(Grid%n), PotPS(Grid%n))
       ALLOCATE(PotAE(Grid%n), PotPSC(Grid%n))
@@ -371,17 +366,23 @@
       ENDIF
           WRITE(6,*) 'AEPOT calcualted'
 
-!!!!!!!!! POTAE_EFF = V_Z+V_H[n_c+n_v]+V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!     
-!!!!!!!!! POTAE_EFF ===> Pot_AE%rv
-
 !!!!!!!!! POTAEC = V_Z + V_H[n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
           den = 0.d0
           call SetPOT(Grid, FC%coreden, den, PotHr, PotXCr, .TRUE.)
-          PotAECr(:) = PotHr(:)-Pot_AE%rvn(:)
+!!!!      VASP_V_Z = -Pot_AE%rvn(j)/Grid%r(j)*RYTOEV/(AUTOA^2*SCALE)
+!!!!      VASP_V_H[n_c] = -PotHr(j)/Grid%r(j)*RYTOEV*AUTOA^2   !!!!  FOR the factor FELECT
+          PotAECr(:) = PotHr(:) + Pot_AE%rvn(:) *AUTOA*AUTOA
 
 !!!!!!!!! POTAE = V_H[n_v] + V_XC[n_c+n_v] !!!!!!!!!!!!!!!!!!!!!!!!!!!
-          call SetPOT(Grid, den, FC%valeden, PotHr, PotXCr, .TRUE.)
+          call SetPOT(Grid, FC%coreden, FC%valeden, PotHr, PotXCr, .FALSE., .TRUE.)
+!!!!      VASP_POTAE = -POTAEr(j)/Grid%r(j)*RYTOEV/(AUTOA^2*SCALE)
           PotAEr(:) = PotHr(:)+PotXCr(:)
+
+!!!!!!!!! POTAE_EFF = V_Z+V_H[n_c+n_v]+V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!     
+!!!!!!!!! POTAE_EFF ===> Pot_AE%rv
+          call SetPOT(Grid, FC%coreden, FC%valeden, PotHr, PotXCr, .TRUE., .TRUE.)
+          PotATr(:) = PotHr(:)+PotXCr(:) + Pot_AE%rvn(:) 
+!!!!      POT_AE%rv = PotAECr + PotAEr
 
 !!!! In calculation, It comes from -( POTAE_TOT - POTAEC ) !!!!!!!!!!!
 !!!!!!!!!!!!!!!      IT IS Big_Num MINUS Big_Num       !!!!!!!!!!!!!!!
@@ -396,20 +397,10 @@
 !              WRITE(6,*) Grid%r(j)*AUTOA, PotAEr(j)/Grid%r(j)*RYTOEV!, Pot_AE%rv(j)/Grid%r(j)*RYTOEV
 !          ENDDO
           DO j=1,Grid%n 
-             WRITE(IU16,*) Grid%r(j)*AUTOA, -PotAEr(j)/Grid%r(j)*RYTOEV !!!  POT_AE
-!             WRITE(6,*) Grid%r(j)*AUTOA, Pot_AE%rv(j)/Grid%r(j)*RYTOEV, PotAECr(j)/Grid%r(j)*RYTOEV  !!!  POT_EFF
-!             WRITE(6,'(6f20.8)') Grid%r(j)*AUTOA, Pot_AE%rv(j)/Grid%r(j), PotAECr(j)/Grid%r(j), PotAEr(j)/Grid%r(j)  !!!  POT_EFF
-!             WRITE(6,*) Grid%r(j), -PAW%AErefrv(j)/Grid%r(j)-20
+             WRITE(IU16,'(8f20.8)') Grid%r(j)*AUTOA, -PotAEr(j)/Grid%r(j)*RYTOEV, &  !!!  VASP_POT_AE
+     &                     -PotAECr(j)/Grid%r(j)*RYTOEV,    &                        !!!  VASP_POT_AEC 
+     &                     -PotATr(j)/Grid%r(j)*RYTOEV, Pot_AE%rv(j)/Grid%r(j)*RYTOEV  !!!  POTAE_EFF
           ENDDO
-
-!          DO j=1, Grid%n
-!             WRITE(6,*) 'den=', PAW%den(j)
-!          ENDDO
-!          Q_00 = integrator(Grid, PAW%den, 1, Grid%n) 
-!         WRITE(6,*) i, 'Q_00=', Q_00 
-!      ALLOCATE(RHOV(Grid%n), d(Grid%n))
-
-          STOP   !! POTAE TEST CORRECT
 
 !!!!!!!!! tcore_den = sum_i B_isin(q_i r)/r !!!!!!!!!!!!!!!!!     
          Call setcoretail2(Grid, FC%coreden)
@@ -598,7 +589,7 @@
 !        deallocate(coreden)
       DEALLOCATE(RHO, V, RHOAE00, CRHODE, RHOLM)
       DEALLOCATE(POT, POTAE_EFF, DPOTAE_EFF, POTAEC)
-      DEALLOCATE(PotHr, PotXCr, PotAEr,PotAECr, PotPS, PotAE, PotAE00,  PotPSC)
+      DEALLOCATE(PotHr, PotXCr, PotAEr, PotATr,PotAECr, PotPS, PotAE, PotAE00,  PotPSC)
       DEALLOCATE(pdensity, PotPSCr)
         CLOSE(IU6)
         CLOSE(IU8)
@@ -622,7 +613,8 @@
          USE atomdata
          USE aeatom
          USE atomdata
-        TYPE(GridInfo) :: Grid2
+!        TYPE(GridInfo) :: Grid2
+        TYPE(GridInfo), INTENT(IN) :: Grid2
         INTEGER :: N
         REAL(q), INTENT(IN) :: coreden(:)
         REAL(q), INTENT(IN) :: valeden(:)
@@ -666,24 +658,6 @@
 !        ENDDO
         IF (PRESENT(LXCADD)) &
         &  call exch(Grid2, density, POTXCR, etxc,eex)
-!        DO i = 1, Grid2%n 
-!            POTXCR(i) = POTXCR(i)*FELECT*SCALE/2.0*AUTOA
-!        ENDDO
-!        Grid2%n = N
-
-        WRITE(6,*) 'QC=', qc
-
-!        DO i = 1, Grid2%n
-!            WRITE(6, '(3f15.8)') Grid2%r(i), POTHR(i), POTXCR(i)
-!        ENDDO
-!        call exch(Grid2, coreden, POT%rvx, etxc,eex)
-!        call exch(Grid2, valeden, POT%rvx, etxc,eex)
-!        DO i = 1, Grid2%n
-!           POT%rvx(i) =  Vrxc_tmp(i)-POT%rvx(i)
-!        ENDDO
-
-!         POT%rv=(POT%rvh+POT%rvx)*SCALE
-!         POT%rv=(POT%rvh+POT%rvx)*FELECT*SCALE/2.0*AUTOA
 
 !        deallocate(density, Vrxc_tmp)
 !        deallocate(POTHR, POTXCR)
