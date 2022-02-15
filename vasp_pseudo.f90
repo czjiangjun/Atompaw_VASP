@@ -291,7 +291,7 @@
          WRITE(25,'(6f20.8)') PP%R%R(j), PP%POTPS(j), POTPS_TEST(j), POTAE_EFF(j), POTPS_EFF(j)
       ENDDO
 
-!!!!!!!!!!!!!  POTPSC = POTPS_EFF - !(V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!  POTPSC =! POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
       POTPSC_TEST(:) = POTPS_EFF(:) - POTPS_TEST(:)
 
       OPEN(UNIT=21,FILE='VASP_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
@@ -384,33 +384,21 @@
           PotATr(:) = PotHr(:)+PotXCr(:) + Pot_AE%rvn(:) 
 !!!!      POT_AE%rv = PotAECr + PotAEr
 
-!!!! In calculation, It comes from -( POTAE_TOT - POTAEC ) !!!!!!!!!!!
-!!!!!!!!!!!!!!!      IT IS Big_Num MINUS Big_Num       !!!!!!!!!!!!!!!
-
-!          PotAEr(:) = PotAECr(:)-Pot_AE%rv(:)
-
-!          DO j = 1, Grid%n
-!             WRITE(6,*) Grid%r(j)*AUTOA, PotHr(j), PotXCr(j), Pot_AE%rvn(j)
-!              WRITE(6,*) Grid%r(j)*AUTOA, Pot_AE%rv(j)/Grid%r(j)*RYTOEV
-!             WRITE(6,*) Grid%r(j)*AUTOA, -Pot_AE%rvn(j)/Grid%r(j)*RYTOEV
-!              WRITE(6,*) Grid%r(j)*AUTOA, PotHr(j)/Grid%r(j)*RYTOEV
-!              WRITE(6,*) Grid%r(j)*AUTOA, PotAEr(j)/Grid%r(j)*RYTOEV!, Pot_AE%rv(j)/Grid%r(j)*RYTOEV
-!          ENDDO
           DO j=1,Grid%n 
-             WRITE(IU16,'(8f20.8)') Grid%r(j)*AUTOA, -PotAEr(j)/Grid%r(j)*RYTOEV, &  !!!  VASP_POT_AE
-     &                     -PotAECr(j)/Grid%r(j)*RYTOEV !,    &                        !!!  VASP_POT_AEC 
-!     &                     -PotATr(j)/Grid%r(j)*RYTOEV, Pot_AE%rv(j)/Grid%r(j)*RYTOEV  !!!  POTAE_EFF
+             WRITE(IU16,'(8f20.8)') Grid%r(j)*AUTOA, -PotAEr(j)/Grid%r(j)*RYTOEV, &    !!!  VASP_POT_AE
+     &                                               -PotAECr(j)/Grid%r(j)*RYTOEV !, & !!!  VASP_POT_AEC 
+!    &                      -PotATr(j)/Grid%r(j)*RYTOEV, Pot_AE%rv(j)/Grid%r(j)*RYTOEV !!!  POTAE_EFF
           ENDDO
 
-!!!!!!!!! tcore_den = sum_i B_isin(q_i r)/r !!!!!!!!!!!!!!!!!     
+!!!!!!!!! tcore_den = sum_i B_i*sin(q_i r)/r !!!!!!!!!!!!!!!!!     
          Call setcoretail2(Grid, FC%coreden)
-!!         Call setcoretail2(Grid, coreden)
          OPEN(UNIT=16,FILE='ATOM_PCORE',STATUS='UNKNOWN',IOSTAT=IERR)
          IF (IERR/=0) THEN
             OPEN(UNIT=16,FILE='ATOM_PCORE',STATUS='OLD')
          ENDIF
+!!!   FC%tcore = \tilde{n}(r)*r^2  ==> consider the UNIT_EXCHANGE
+!!!   PP%RHOPS = AUTOAE * FC%tcore/(SCALE *AUTOA*AUTOA)
          DO j=1,Grid%n 
-!             WRITE(IU12,*) Grid%r(j)*AUTOA, PAW%tcore(j)/SCALE/AUTOA
             WRITE(IU12,*) Grid%r(j)*AUTOA, PAW%tcore(j)*AUTOA
          ENDDO
 !            irc_core= FindGridIndex(Grid, PAW%rc_core)
@@ -421,17 +409,15 @@
 
          OPEN(UNIT=17,FILE='ATOM_WPS',STATUS='UNKNOWN',IOSTAT=IERR)
          IF (IERR/=0) THEN
-!            OPEN(UNIT=12,FILE='ATOM_WAE',STATUS='OLD')
             OPEN(UNIT=17,FILE='ATOM_WPS',STATUS='OLD')
          ENDIF
+!!!   PAW%tphi = tphi(r)*r  ==> consider the UNIT_EXCHANGE
+!!!   PP%WPS = SQRT(AUTOA) * PAW%tphi/AUTOA  !!! SO THAT the DENSITY IS SAME !!!
          DO i=1, PAW%nbase
-          DO j=1, Grid%n
-!             WRITE(IU8,*) Grid%r(j)*AUTOA, PAW%phi(j,i)/sqrt(AUTOA)
-!             WRITE(IU8,*) Grid%r(j)*AUTOA, PAW%phi(j,i)
-             WRITE(IU13,*) Grid%r(j)*AUTOA, PAW%tphi(j,i)/sqrt(AUTOA)
-          ENDDO
-!          WRITE(IU8,*)
-          WRITE(IU13,*)
+            DO j=1, Grid%n
+               WRITE(IU13,*) Grid%r(j)*AUTOA, PAW%tphi(j,i)/sqrt(AUTOA)
+            ENDDO
+            WRITE(IU13,*)
          ENDDO
 
 !      ALLOCATE(RHOV(Grid%n), d(Grid%n))
@@ -454,18 +440,21 @@
          CALL FindVlocfromVeff(Grid,FCOrbit,PAW)
 
 !!   ---------------- Method 2 ----------------------
-!!!!!!!!!!!!!!!!!!!! POT_tVeff FROM POT_EFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!     
          DO i = 1, Grid%n
-            Pot_eff(i) = Pot_AE%rv(i)/Grid%r(i)
+            Pot_eff(i) = (PotAEr(i)+PotAECr(i))/Grid%r(i)
          ENDDO
+
+!!!!!!!!!!!!!!!!!!!! POT_tVeff FROM POT_EFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!     
          call SetPOT_TEFF(Grid, Pot_eff, Pot_teff)
          
-         WRITE(6,*) 'TEST!!'
-          DO j=1,Grid%n 
-!             WRITE(IU16,*) Grid%r(j)*AUTOA, PotAEr(j)/Grid%r(j)*RYTOEV! , Pot_teff(j)!*SCALE*RYTOEV   !!  POT_EFF
-             WRITE(6,*) Grid%r(j)*AUTOA, Pot_eff(j)*RYTOEV, Pot_teff(j)*RYTOEV
-          ENDDO
-          STOP   !! POTPS_EFF TEST CORRECT
+         OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
+         IF (IERR/=0) THEN
+             OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='OLD')
+         ENDIF
+         DO j=1,Grid%n 
+            WRITE(IU18,*) Grid%r(j)*AUTOA, -Pot_teff(j)*RYTOEV
+         ENDDO
+!         STOP   !! POTPS_EFF TEST CORRECT
 
 !!!!!!!!!! PSEUDO Calculations !!!!!!!!!!!!!!!!!!!!         
 !         nbase=PAW%nbase
@@ -504,9 +493,9 @@
 !            WRITE(6,*) 'unscreened POTPS calcualted'
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!            irc=max(PAW%irc,PAW%irc_shap,PAW%irc_vloc,PAW%irc_core)
-            irc= FindGridIndex(Grid, PAW%rc_shap)
-            N = Grid%n
+!        irc=max(PAW%irc,PAW%irc_shap,PAW%irc_vloc,PAW%irc_core)
+         irc= FindGridIndex(Grid, PAW%rc_shap)
+!         N = Grid%n
 !            Q_00 = integrator(Grid, PAW%den, 1, N) 
 !           write(6,*) 'Q_00 for atom ', N, Q_00, PAW%den
 !            Q_00 = integrator(Grid, PAW%den, 1, irc) 
@@ -529,50 +518,43 @@
 !           write(6,*) 'Q_00 for atom ', irc, Q_00
 !            Q_00 = (integrator(Grid, PAW%den, 1, irc)-integrator(Grid,PAW%tden,1, irc))  &
 !             + (integrator(Grid, FC%coreden, 1, irc)-integrator(Grid, PAW%tcore,1, irc))
-            Q_00 = (integrator(Grid, PAW%den, 1, irc)-integrator(Grid,PAW%tden,1, irc)) 
-            Q_00c = (integrator(Grid, FC%coreden, 1, irc)-integrator(Grid, PAW%tcore,1, irc))
+         Q_00 = (integrator(Grid, PAW%den, 1, irc)-integrator(Grid,PAW%tden,1, irc)) 
+         Q_00c = (integrator(Grid, FC%coreden, 1, irc)-integrator(Grid, PAW%tcore,1, irc))
 
-!            Q_00 = 2.4
+!        Q_00 = 2.4
             
-!             Q_00= integrator(Grid, Q_00*PAW%hatden, 1, irc)
-!           write(6,*) 'Q_00 for atom ', irc, Q_00
-!             Q_00= integrator(Grid, (10-Q_00)*PAW%hatden, 1, irc)
-!           write(6,*) 'Q_00c for atom ', irc, Q_00c
-!            pdensity=PAW%tden
+!        Q_00= integrator(Grid, Q_00*PAW%hatden, 1, irc)
+!        write(6,*) 'Q_00 for atom ', irc, Q_00
+!        Q_00= integrator(Grid, (10-Q_00)*PAW%hatden, 1, irc)
+!        write(6,*) 'Q_00c for atom ', irc, Q_00c
+!        pdensity=PAW%tden
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!!!!!! tn = tn_v + that n = tn_v + \sum Qg
-              pdensity=(PAW%tden+(Q_00)*PAW%hatden)
-!              pdensity=PAW%tden+Q_00*PAW%hatden
-!              cpdensity=PAW%tcore+Q_00c*PAW%hatden
+         pdensity=(PAW%tden+(Q_00)*PAW%hatden)
+!        pdensity=PAW%tden+Q_00*PAW%hatden
+!        cpdensity=PAW%tcore+Q_00c*PAW%hatden
 
 !!!!!!!!! POTPS = V_H[tn_v+that_n]+V_XC[tn_v+that_n+tn_c] !!!!!!!!!!!!!!!!!     
-!            call SetPOT(Grid, PAW%tcore, pdensity, PotHr, PotXCr, .FALSE.)
-            call SetPOT(Grid, PAW%tcore, pdensity, PotHr, PotXCr, .FALSE., LXCADD=.TRUE.)
-!            call SetPOT(Grid, cpdensity, pdensity, PotHr, PotXCr, .FALSE.)
+         call SetPOT(Grid, PAW%tcore, pdensity, PotHr, PotXCr, .FALSE., LXCADD=.TRUE.)
 
-            DO j=1,Grid%n 
-              PotPS(j) = -(PotHr(j)+PotXCr(j))
-            ENDDO
+         DO j=1,Grid%n 
+            PotPS(j) = (PotHr(j)+PotXCr(j))/Grid%r(j)
+         ENDDO
 
-!!!!!!!!!!!!!!!!!!!  POT_PSC = POT_tVEFF - Pot_PS  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!  POTPSC =! POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
+         DO j =1, Grid%n
+            PotPSC(j)= -Pot_teff(j)+PotPS(j)
+         ENDDO
 
-!           call SetPOT(Grid,PAW%tcore, pdensity , PotHr, PotXCr, .FALSE.)
-            DO j =1, Grid%n
-              PotPSC(j)= Pot_teff(j)+PotPS(j)/Grid%r(j)
-            ENDDO
-
-         OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
          OPEN(UNIT=24,FILE='ATOM_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
          IF (IERR/=0) THEN
-             OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='OLD')
              OPEN(UNIT=24,FILE='ATOM_POTPSC',STATUS='OLD')
          ENDIF
 
-          DO j=1, Grid%n
-             WRITE(IU18,*) Grid%r(j)*AUTOA, PotPS(j)/Grid%r(j)*RYTOEV
-             WRITE(IU20,*) Grid%r(j)*AUTOA, PotPSC(j)*RYTOEV
-          ENDDO
+         DO j=1, Grid%n
+            WRITE(IU20,*) Grid%r(j)*AUTOA, PotPSC(j)*RYTOEV   !, -PotAECr(j)/Grid%r(j)*RYTOEV
+         ENDDO
 
 
 !!   ---------------- POTAEC IN REAL ----------------------
@@ -666,8 +648,9 @@
 
 
         SUBROUTINE SetPOT_TEFF(Grid2, POTAE, POTPS, RC_CUT)
+!!!!!!!!!!!!!!!!!!!!!!!! POTPS_EFF = A*sin(qloc*r)/r !!!!!!!!!!!!!!!!!!!!!!!!!!!
          TYPE(GridInfo) :: Grid2
-         REAL(q) :: PotPS(Grid2%n), PotAE(Grid2%n), PotAEr(Grid2%n)
+         REAL(q) :: PotPS(Grid2%n), PotAE(Grid2%n)
          REAL(q) :: ql(2), qr, xx(2), bb(2), alpha, beta
          REAL(q) :: RC, g, gp, gpp, gg
          REAL(q) :: jbes, jbesp, jbespp, amat(2,2), al(2)
@@ -678,48 +661,30 @@
             irc= FindGridIndex(Grid2, RC_CUT)
             rc = RC_CUT
          ELSE
-           irc=PAW%irc_vloc
-           rc=PAW%rc_vloc
-      ENDIF
+            irc = PAW%irc_vloc
+            rc = Grid2%r(irc)
+         ENDIF
 
-      PotAEr = 0.d0
-      PotPS = 0.d0
-      PotAEr= POTAE
-      alpha=1-rc*Gfirstderiv(Grid2,irc,PotAEr)/PotAEr(irc)
-      beta=1.0d0
-      call solvbes(xx,alpha,beta,0,2)
-      ql(1:2)=xx(1:2)/rc
+         alpha=1-rc*Gfirstderiv(Grid2,irc,POTAE)/POTAE(irc)
+         beta=1.0d0
+         call solvbes(xx,alpha,beta,0,1)
+         ql(1)=xx(1)/rc
 
-      DO i=1,2
-        qr=ql(i)*rc
-        call jbessel(jbes,jbesp,jbespp, 0, 2, qr)
-        jbespp=2.d0*ql(i)*jbesp+jbespp*ql(i)*ql(i)*rc
-        jbesp=jbes+jbesp*ql(i)*rc
-        jbes=jbes*rc
-        amat(1,i)=jbes
-        amat(2,i)=jbespp
-      ENDDO
+            qr=ql(1)*rc
+            call jbessel(jbes,jbesp,jbespp, 0, 1, qr)
 
-      bb(1)=PotAEr(irc)
-      bb(2)=Gsecondderiv(Grid2, irc,PotAEr)
+         DO i=irc,Grid2%n
+            POTPS(i) = POTAE(i)
+         ENDDO
 
-      det=amat(1,1)*amat(2,2)-amat(1,2)*amat(2,1)
-      al(1)=(amat(2,2)*bb(1)-amat(1,2)*bb(2))/det
-      al(2)=(amat(1,1)*bb(2)-amat(2,1)*bb(1))/det
+         al(1) = POTAE(irc)*rc/SIN(xx(1))
+         do i=1,irc-1
+            qr=ql(1)*Grid2%r(i)
+            PotPS(i)=al(1)*SIN(qr)/Grid2%r(i)
+         enddo
 
-      PotPS=PotAEr!/Grid%r
-
-        do i=1,irc-1
-           qr=ql(1)*Grid2%r(i)
-           call jbessel(g,gp,gpp,0,2,qr)
-           PotPS(i)=al(1)*g!/Grid2%r(i)
-           qr=ql(2)*Grid2%r(i)
-           call jbessel(g,gp,gpp,0,2,qr)
-           PotPS(i)=PotPS(i)+al(2)*g!/Grid2%r(i)
-        enddo
-
-        RETURN
-        END SUBROUTINE SetPOT_TEFF
+         RETURN
+         END SUBROUTINE SetPOT_TEFF
 
 !*******************************************************************
 !
