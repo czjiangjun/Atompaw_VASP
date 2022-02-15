@@ -300,7 +300,8 @@
       ENDIF
 
       DO j=1, PP%R%NMAX
-         WRITE(IU17,'(6f20.8)') PP%R%R(j), PP%POTPSC(j), POTPS_EFF(j)- POTPS_TEST(j)
+         WRITE(IU17,'(6f20.8)') PP%R%R(j), PP%POTPSC(j), POTPS_EFF(j)- POTPS_TEST(j),  &
+     &                         (PP%POTPSC(j) - POTPS_EFF(j)+POTPS_TEST(j))*PP%R%R(j)    
       ENDDO
 
 
@@ -556,9 +557,13 @@
             WRITE(IU20,*) Grid%r(j)*AUTOA, PotPSC(j)*RYTOEV   !, -PotAECr(j)/Grid%r(j)*RYTOEV
          ENDDO
 
-
 !!   ---------------- POTAEC IN REAL ----------------------
-!            call SetPOT_TEFF(Grid, PotAECr, PotPSC)
+!!!!!!!!!!!!!!!!!!!! POT_V[\tilde{n}_Zc] FROM POT_V[n_Zc] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!     
+!         call SetPOT_TEFF(Grid, PotAECr/Grid%r, PotPSC)
+!         DO j=1, Grid%n
+!            WRITE(IU20,*) Grid%r(j)*AUTOA, -PotPSC(j)*RYTOEV   !, -PotAECr(j)/Grid%r(j)*RYTOEV
+!         ENDDO
+
 
 
          STOP
@@ -639,7 +644,7 @@
 !            POTHR(i) = POTHR(i)*FELECT*SCALE/2.0*AUTOA
 !        ENDDO
         IF (PRESENT(LXCADD)) &
-        &  call exch(Grid2, density, POTXCR, etxc,eex)
+     &     call exch(Grid2, density, POTXCR, etxc,eex)
 
 !        deallocate(density, Vrxc_tmp)
 !        deallocate(POTHR, POTXCR)
