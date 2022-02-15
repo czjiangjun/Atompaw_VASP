@@ -558,37 +558,38 @@
          ENDDO
 
 !!   ---------------- !!!!!! POT_V[\tilde{n}_Zc] FROM POT_V[n_Zc] !!!!!  ----------------------    !!     
-!         call SetPOT_TEFF(Grid, PotAECr/Grid%r, PotPSC)
+         call SetPOT_TEFF(Grid, PotAECr/Grid%r, PotPSC)
 !         DO j=1, Grid%n
 !            WRITE(IU20,*) Grid%r(j)*AUTOA, -PotPSC(j)*RYTOEV   !, -PotAECr(j)/Grid%r(j)*RYTOEV
 !         ENDDO
 
+!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POT_V[n_Zc] !!!!!  ----------------------    !     
 !        CALL FOURPOT_TO_Q()
 
+!        deallocate(coreden)
+         DEALLOCATE(RHO, V, RHOAE00, CRHODE, RHOLM)
+         DEALLOCATE(POT, POTAE_EFF, DPOTAE_EFF, POTAEC)
+         DEALLOCATE(PotHr, PotXCr, PotAEr, PotATr,PotAECr, PotPS, PotAE, PotAE00,  PotPSC)
+         DEALLOCATE(pdensity, PotPSCr)
+
+         CLOSE(IU6)
+         CLOSE(IU8)
+         CLOSE(IU9)
+         CLOSE(IU10)
+         CLOSE(IU11)
+         CLOSE(IU12)
+         CLOSE(IU13)
+!         CLOSE(IU14)
+         CLOSE(IU15)
+         CLOSE(IU16)
+         CLOSE(IU17)
+         CLOSE(IU18)
+         CLOSE(IU19)
+         CLOSE(IU20)
 
         CALL Report_Pseudopotential(Grid,PAW)
         CALL SPMatrixElements(Grid,FCPot,FC,PAW)
 
-
-!        deallocate(coreden)
-      DEALLOCATE(RHO, V, RHOAE00, CRHODE, RHOLM)
-      DEALLOCATE(POT, POTAE_EFF, DPOTAE_EFF, POTAEC)
-      DEALLOCATE(PotHr, PotXCr, PotAEr, PotATr,PotAECr, PotPS, PotAE, PotAE00,  PotPSC)
-      DEALLOCATE(pdensity, PotPSCr)
-        CLOSE(IU6)
-        CLOSE(IU8)
-        CLOSE(IU9)
-        CLOSE(IU10)
-        CLOSE(IU11)
-        CLOSE(IU12)
-        CLOSE(IU13)
-!        CLOSE(IU14)
-        CLOSE(IU15)
-        CLOSE(IU16)
-        CLOSE(IU17)
-        CLOSE(IU18)
-        CLOSE(IU19)
-        CLOSE(IU20)
         RETURN
 ! 
         END SUBROUTINE vasp_pseudo
