@@ -314,6 +314,8 @@
 !             WRITE(IU19,*) PP%PSDMAX
 !             WRITE(IU19,*)
 
+!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POT_V[n_Zc] !!!!!  ----------------------    !     
+
 !!      CALL FOURPOT_TO_Q( PP%RDEP, POT, PP%PSP(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
 !      PP%PSP_TEST(:,2) = 0.0
 !      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), PP%POTPSC, PP%PSP_TEST(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
@@ -322,9 +324,9 @@
 !             WRITE(IU19,'(4f20.8)') PP%PSP(j,2), -PP%PSP_TEST(j,2)
 !          ENDDO
 
-!!!!  UNIT IN VASP     E: Hartree   r: Angstrom
+!!!! -------------- UNIT IN VASP     E: Hartree   r: Angstrom ------------------ !!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!  UNIT IN AtomPAW  E: Ry        r: A.u. 
+!!!!  --------------  UNIT IN AtomPAW  E: Ry        r: A.u.  ------------------ !!!!
 
 !      WRITE(6,*) 'irc=', PAW%irc
 !      Grid%n = PAW%irc
