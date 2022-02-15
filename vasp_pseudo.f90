@@ -557,21 +557,18 @@
             WRITE(IU20,*) Grid%r(j)*AUTOA, PotPSC(j)*RYTOEV   !, -PotAECr(j)/Grid%r(j)*RYTOEV
          ENDDO
 
-!!   ---------------- POTAEC IN REAL ----------------------
-!!!!!!!!!!!!!!!!!!!! POT_V[\tilde{n}_Zc] FROM POT_V[n_Zc] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!     
+!!   ---------------- !!!!!! POT_V[\tilde{n}_Zc] FROM POT_V[n_Zc] !!!!!  ----------------------    !!     
 !         call SetPOT_TEFF(Grid, PotAECr/Grid%r, PotPSC)
 !         DO j=1, Grid%n
 !            WRITE(IU20,*) Grid%r(j)*AUTOA, -PotPSC(j)*RYTOEV   !, -PotAECr(j)/Grid%r(j)*RYTOEV
 !         ENDDO
 
+!        CALL FOURPOT_TO_Q()
 
-
-         STOP
 
         CALL Report_Pseudopotential(Grid,PAW)
         CALL SPMatrixElements(Grid,FCPot,FC,PAW)
 
-!        CALL FOURPOT_TO_Q()
 
 !        deallocate(coreden)
       DEALLOCATE(RHO, V, RHOAE00, CRHODE, RHOLM)
