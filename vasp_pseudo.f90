@@ -347,7 +347,7 @@
 !!!   FC%coreden = n(r)*r^2  ==> consider the UNIT_EXCHANGE
 !!!   PP%RHOAE = AUTOAE * FC%coreden/(SCALE *AUTOA*AUTOA)
       DO j=1,Grid%n 
-         WRITE(IU10,*) Grid%r(j)*AUTOA, FC%coreden(j)/(SCALE*AUTOA)
+         WRITE(IU10,'(6f20.8)') Grid%r(j)*AUTOA, FC%coreden(j)/(SCALE*AUTOA)
       ENDDO
 !
       OPEN(UNIT=12,FILE='ATOM_WAE',STATUS='UNKNOWN',IOSTAT=IERR)
@@ -358,7 +358,7 @@
 !!!   PP%WAE = SQRT(AUTOAE) * PAW%phi/AUTOA  !!! SO THAT the DENSITY IS SAME !!!
       DO i=1, PAW%nbase
          DO j=1, Grid%n
-             WRITE(IU8,*) Grid%r(j)*AUTOA, PAW%phi(j,i)/SQRT(AUTOA)
+             WRITE(IU8,'(6f20.8)') Grid%r(j)*AUTOA, PAW%phi(j,i)/SQRT(AUTOA)
          ENDDO
          WRITE(IU8,*)
       ENDDO
@@ -402,7 +402,7 @@
 !!!   FC%tcore = \tilde{n}(r)*r^2  ==> consider the UNIT_EXCHANGE
 !!!   PP%RHOPS = AUTOAE * FC%tcore/(SCALE *AUTOA*AUTOA)
          DO j=1,Grid%n 
-            WRITE(IU12,*) Grid%r(j)*AUTOA, PAW%tcore(j)*AUTOA
+            WRITE(IU12,'(6f20.8)') Grid%r(j)*AUTOA, PAW%tcore(j)*AUTOA
          ENDDO
 !            irc_core= FindGridIndex(Grid, PAW%rc_core)
 !            Q_00 = integrator(Grid, PAW%tcore, 1, irc_core) 
@@ -418,7 +418,7 @@
 !!!   PP%WPS = SQRT(AUTOA) * PAW%tphi/AUTOA  !!! SO THAT the DENSITY IS SAME !!!
          DO i=1, PAW%nbase
             DO j=1, Grid%n
-               WRITE(IU13,*) Grid%r(j)*AUTOA, PAW%tphi(j,i)/sqrt(AUTOA)
+               WRITE(IU13,'(6f20.8)') Grid%r(j)*AUTOA, PAW%tphi(j,i)/sqrt(AUTOA)
             ENDDO
             WRITE(IU13,*)
          ENDDO
@@ -450,15 +450,6 @@
 !!!!!!!!!!!!!!!!!!!! POT_tVeff FROM POT_EFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!     
          call SetPOT_TEFF(Grid, Pot_eff, Pot_teff)
          
-         OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
-         IF (IERR/=0) THEN
-             OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='OLD')
-         ENDIF
-         DO j=1,Grid%n 
-            WRITE(IU18,*) Grid%r(j)*AUTOA, -Pot_teff(j)*RYTOEV
-         ENDDO
-!         STOP   !! POTPS_EFF TEST CORRECT
-
 !!!!!!!!!! PSEUDO Calculations !!!!!!!!!!!!!!!!!!!!         
 !         nbase=PAW%nbase
 !
@@ -545,6 +536,15 @@
             PotPS(j) = (PotHr(j)+PotXCr(j))/Grid%r(j)
          ENDDO
 
+         OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
+         IF (IERR/=0) THEN
+             OPEN(UNIT=22,FILE='ATOM_POTPS',STATUS='OLD')
+         ENDIF
+         DO j=1,Grid%n 
+            WRITE(IU18,'(6f20.8)') Grid%r(j)*AUTOA, -PotPS(j)*RYTOEV, -Pot_eff(j)*RYTOEV, -Pot_teff(j)*RYTOEV
+         ENDDO
+!         STOP   !! POTPS_EFF TEST CORRECT
+
 !!!!!!!!!!!!!  POTPSC =! POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
          DO j =1, Grid%n
             PotPSC(j)= -Pot_teff(j)+PotPS(j)
@@ -556,7 +556,7 @@
          ENDIF
 
          DO j=1, Grid%n
-            WRITE(IU20,*) Grid%r(j)*AUTOA, PotPSC(j)*RYTOEV   !, -PotAECr(j)/Grid%r(j)*RYTOEV
+            WRITE(IU20,'(6f20.8)') Grid%r(j)*AUTOA, PotPSC(j)*RYTOEV   !, -PotAECr(j)/Grid%r(j)*RYTOEV
          ENDDO
 
 !!   ---------------- !!!!!! POT_V[\tilde{n}_Zc] FROM POT_V[n_Zc] !!!!!  ----------------------    !!     
