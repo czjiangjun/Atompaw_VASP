@@ -34,7 +34,7 @@
          REAL(q), ALLOCATABLE :: PotHr(:), PotXCr(:), PotAEr(:), PotAECr(:), PotATr(:)
          REAL(q), ALLOCATABLE :: Pot_eff(:), Pot_teff(:)
          REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
-         REAL(q), ALLOCATABLE :: POTAE_EFF(:), DPOTAE_EFF(:), POTPS_EFF(:)
+         REAL(q), ALLOCATABLE :: POTAE_EFF(:), DPOTAE_EFF(:), POTPS_EFF(:), POTPS_G(:)
          REAL(q), ALLOCATABLE :: pdensity(:), den(:) ,cpdensity(:)
          INTEGER :: nbase, N, irc, irc_core, irc_shap
          REAL(q) :: Q_00 , Q_00c, tq, alpha, beta
@@ -71,7 +71,7 @@
 !         VCA(1) = 1.0
          LPAW = .TRUE.
          IU0 = 6
-         IU6 = 7
+         IU5 = 7
          IU7 = 8
          IU9 = 13
         IU11 = 15
@@ -105,11 +105,11 @@
       ENDIF
       DO i=1, CHANNELS
         DO j=1, PP%R%NMAX
-           WRITE(IU6,*) PP%R%R(j), PP%WAE(j,i)
+           WRITE(IU5,*) PP%R%R(j), PP%WAE(j,i)
 !       if (mod(i,2) == 0)WRITE(IU6,*) PP%R%R(j), PP%WAE(j,i)
            WRITE(IU7,*) PP%R%R(j), PP%WPS(j,i)
         ENDDO
-        WRITE(IU6,*)
+        WRITE(IU5,*)
         WRITE(IU7,*)
       ENDDO
 
@@ -147,6 +147,7 @@
       ALLOCATE(POT(PP%R%NMAX, LMMAX,1), POTAEC(PP%R%NMAX))
       ALLOCATE(POTAE_EFF(PP%R%NMAX),DPOTAE_EFF(PP%R%NMAX), POTPS_EFF(PP%R%NMAX) )
       ALLOCATE(POT_TEST(PP%R%NMAX),POTAE_TEST(PP%R%NMAX), POTPSC_TEST(PP%R%NMAX) )
+      ALLOCATE(POTPS_G(NPSPTS))
       ALLOCATE(POTPS_TEST(PP%R%NMAX))
 !      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
       ALLOCATE(CRHODE(LDIM,LDIM))
@@ -216,6 +217,7 @@
       CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
                    RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
       POTAE_EFF(:) =  -POT(:,1,1)/SCALE
+!      POTAE_EFF(:) =  PP%POTAE(:)-POTAEC(:)
 
       OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
@@ -314,15 +316,20 @@
 !             WRITE(IU19,*) PP%PSDMAX
 !             WRITE(IU19,*)
 
-!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POT_V[n_Zc] !!!!!  ----------------------    !     
+!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POTAE_EFF !!!!!  ----------------------    !     
 
 !!      CALL FOURPOT_TO_Q( PP%RDEP, POT, PP%PSP(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
-!      PP%PSP_TEST(:,2) = 0.0
-!      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), PP%POTPSC, PP%PSP_TEST(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
+      POTPS_G(:) = 0.0
+!      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), PP%POTPSC, POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
+      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), -POTAE_EFF, POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
 
-!          DO j=1, SIZE(PP%PSP,1)
-!             WRITE(IU19,'(4f20.8)') PP%PSP(j,2), -PP%PSP_TEST(j,2)
-!          ENDDO
+      OPEN(UNIT=23,FILE='VASP_G_POTEFF',STATUS='UNKNOWN',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=23,FILE='VASP_G_POTEFF',STATUS='OLD')
+      ENDIF
+      DO j=1, SIZE(PP%PSP,1)
+         WRITE(IU19,'(6f20.8)') PP%PSP(j,1), PP%PSP(j,2), abs(POTPS_G(j))
+      ENDDO
 
 !!!! -------------- UNIT IN VASP     E: Hartree   r: Angstrom ------------------ !!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -574,7 +581,7 @@
          DEALLOCATE(PotHr, PotXCr, PotAEr, PotATr,PotAECr, PotPS, PotAE, PotAE00,  PotPSC)
          DEALLOCATE(pdensity, PotPSCr)
 
-         CLOSE(IU6)
+         CLOSE(IU5)
          CLOSE(IU8)
          CLOSE(IU9)
          CLOSE(IU10)
