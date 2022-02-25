@@ -258,8 +258,8 @@ def main():
     linestyle = Fig_linestyle(style)
     type = random.choice(linestyle.line)
 #    print(type)
-    Potential = Fig_Draw('Potential', 'VASP_POTCAR', xlabel, ylabel, cure_type = type, marker = '*')
-#    Potential = Fig_Draw('Potential', 'VASP_POTCAR', xlabel, ylabel, cure_type = type)
+    Potential = Fig_Draw('Potential', 'VASP_POTPS', xlabel, ylabel, cure_type = type, marker = '*')
+#    Potential = Fig_Draw('Potential', 'VASP_POTPS', xlabel, ylabel, cure_type = type)
     for i in range(2):
         XX, YY, lines = Potential.Data(FILE_NAME, i+1)
         Potential.Fig(XX, YY)
