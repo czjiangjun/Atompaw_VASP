@@ -1054,6 +1054,20 @@
          TYPE(INFO_STRUCT) :: INFO
          TYPE(in_struct) IO
 !         TYPE(PseudoInfo) :: PAW
+!      CHARACTER*40 SZNAMP         ! header
+      CHARACTER*80 :: CSEL
+      CHARACTER(LEN=4) :: PARAM_CHARACTER
+      REAL(q)  ::   POTCAR_PARAM
+      INTEGER  ::   XC_TYPE
+      REAL(q), ALLOCATABLE :: POTCAR_DATA(:)
+      LOGICAL  ::   PARAM_LOG
+
+      ALLOCATE(POTCAR_DATA(NPSPTS))
+
+      OPEN(UNIT=10,FILE='POTCAR',STATUS='OLD',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=10,FILE='POTCAR',STATUS='OLD')
+      ENDIF
 
       OPEN(UNIT=88,FILE='POTCAR_NEW',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
@@ -1064,16 +1078,56 @@
       INFO%LOVERL=.FALSE.
       INFO%LCORE =.FALSE.
       
-      WRITE(88,'(A40)') FROM_PP%SZNAMP
-      WRITE(88,*) FROM_PP%ZVALF
-      WRITE(88,*) ' parameters from PSCTR are:'
-      WRITE(88,*) '   VRHFIN =', FROM_PP%ELEMENT
+!      READ(10,'(A40)',END=100,ERR=100) SZNAMP
+!      WRITE(88,'(A40)') SZNAMP
+!      READ(10,*) 
+!      WRITE(88,*) FROM_PP%ZVALF
+!!!!!   HEAD, ELEMENT & PSCTR PARAMETER   !!!!!
+      DO I=1,59
+        READ(10,'(A80)') CSEL
+        WRITE(88,'(A80)') CSEL
+      ENDDO
       
-!      WRITE(88,'(1X,A1)') CSEL
-!      WRITE(88,'(1X,A1)') CSEL
-      WRITE(88,*) FROM_PP%PSGMAX
-      WRITE(88,*) (FROM_PP%PSP (I,2),I=1,NPSPTS)
-      
+!!!!!   LOCAL PART POTENTIAL   !!!!!
+      READ(10,*) POTCAR_PARAM
+      READ(10,*) (POTCAR_DATA(I),I=1,NPSPTS)
+      WRITE(88,'(F19.13)') POTCAR_PARAM
+      WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
+
+!!!!!          XC_TYPE         !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) XC_TYPE
+      WRITE(88,'(I12)') XC_TYPE
+
+!!!!!      PSPCOR             !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,NPSPTS)
+      WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
+
+!!!!!  KINETIC ENERGY PARTIAL     !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,NPSPTS)
+      WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
+
+!!!!!   ATOMIC PSEUDO CHARGE-DENSITY     !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,NPSPTS)
+      WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
+
+!!!!!   NON LOCAL PART    !!!!!
+      READ(10,*) POTCAR_PARAM, PARAM_CHARACTER
+      WRITE(88,500) POTCAR_PARAM, PARAM_CHARACTER
+
+100   CONTINUE
+
+500      FORMAT(F19.13, 6X, A1)
+      DEALLOCATE(POTCAR_DATA)
+      CLOSE(10)
+      CLOSE(88)
 
        END SUBROUTINE WRITE_POTCAR
 
