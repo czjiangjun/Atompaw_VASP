@@ -1058,7 +1058,7 @@
       CHARACTER*80 :: CSEL
       CHARACTER(LEN=4) :: PARAM_CHARACTER
       REAL(q)  ::   POTCAR_PARAM
-      INTEGER  ::   XC_TYPE
+      INTEGER  ::   XC_TYPE, L1, L2, NMAX, NRANGE
       REAL(q), ALLOCATABLE :: POTCAR_DATA(:)
       LOGICAL  ::   PARAM_LOG
 
@@ -1118,13 +1118,105 @@
       READ(10,*) (POTCAR_DATA (I),I=1,NPSPTS)
       WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
 
-!!!!!   NON LOCAL PART    !!!!!
+!!!!!   NON LOCAL PART PROJECTOR   !!!!!
+!      WRITE(6,*) 'nbase=',PAW%nbase, PAW%l(PAW%nbase)
       READ(10,*) POTCAR_PARAM, PARAM_CHARACTER
       WRITE(88,500) POTCAR_PARAM, PARAM_CHARACTER
+      DO L = 0,  PAW%l(PAW%nbase)
+        READ(10,'(A80)') CSEL
+        WRITE(88,'(A80)') CSEL
+        READ(10,*) L1, NL1, POTCAR_PARAM
+        WRITE(88,'(2I12, F19.14)') L1, NL1, POTCAR_PARAM
+        READ(10,*) (POTCAR_DATA (I),I=1,4)
+        WRITE(88,'(F19.14, 2F24.13)') (POTCAR_DATA (I),I=1,4)
 
+        DO LI = 1, NL1
+        !!!!!   RECIPROCAL SPACE PART   !!!!!
+           READ(10,'(A80)') CSEL
+           WRITE(88,'(A80)') CSEL
+           WRITE(6,*) 'NPSNL=', NPSNL
+           READ(10,*) (POTCAR_DATA (I),I=1,NPSNL)
+           WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSNL)
+       !!!!!   REAL SPACE PART   !!!!!
+           READ(10,'(A80)') CSEL
+           WRITE(88,'(A80)') CSEL
+           READ(10,*) (POTCAR_DATA (I),I=1,NPSNL)
+           WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSNL)
+        ENDDO
+      ENDDO
+
+!!!!!        PAW PART        !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) NMAX, POTCAR_PARAM
+      WRITE(88,600) FROM_PP%R%NMAX, POTCAR_PARAM
+      READ(10,*) 
+      WRITE(88,*)'(5E20.12)' 
+
+      NRANGE = (PAW%l(PAW%nbase)+1)**4
+      DO I =1, 2
+!!!!!   augmentation charge (non spherical)   !!!!!
+         READ(10,'(A80)') CSEL
+         WRITE(88,'(A80)') CSEL
+         READ(10,*) (POTCAR_DATA (J),J=1,NRANGE)
+         WRITE(88,'(5E20.12)') (POTCAR_DATA (J),J=1,NRANGE)
+      ENDDO
+!!!!!            grid              !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!            aepotential              !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!        core charge-density          !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!       kinetic energy-density        !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!    mkentic energy-density pseudized    !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!      local pseudo-potential core      !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!     pseudo-potential valence only      !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!     core-charge density (pseudized)     !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+
+!!!!!     wave-function     !!!!!
+      WRITE(6,*) 'nbase=', PAW%nbase
+      DO I = 1, PAW%nbase
+        DO J = 1, 2
+           READ(10,'(A80)') CSEL
+           WRITE(88,'(A80)') CSEL
+           READ(10,*) (POTCAR_DATA (K),K=1,FROM_PP%R%NMAX)
+           WRITE(88,'(5E20.12)') (POTCAR_DATA (K),K=1,FROM_PP%R%NMAX)
+        ENDDO 
+      ENDDO
+      WRITE(88,*) 'End of Dataset'
 100   CONTINUE
 
 500      FORMAT(F19.13, 6X, A1)
+600      FORMAT(I12, F19.15)
       DEALLOCATE(POTCAR_DATA)
       CLOSE(10)
       CLOSE(88)
