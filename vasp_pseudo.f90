@@ -354,6 +354,7 @@
 !!!   FC%coreden = n(r)*r^2  ==> consider the UNIT_EXCHANGE
 !!!   PP%RHOAE = AUTOAE * FC%coreden/(SCALE *AUTOA*AUTOA)
       DO j=1,Grid%n 
+!         WRITE(IU10,'(6f20.8)') Grid%r(j)*AUTOA, FC%coreden(j)/(SCALE*AUTOA)/(SCALE*AUTOA)
          WRITE(IU10,'(6f20.8)') Grid%r(j)*AUTOA, FC%coreden(j)/(SCALE*AUTOA)
       ENDDO
 !
@@ -576,7 +577,7 @@
 !        CALL FOURPOT_TO_Q()
 
          WRITE(6, *) 'WRITE_POTCAR'
-         CALL WRITE_POTCAR(INFO, PP, Grid, PAW)
+         CALL WRITE_POTCAR(INFO, PP, Grid, FC%coreden, PAW, PotAEr)
 
 !        deallocate(coreden)
          DEALLOCATE(RHO, V, RHOAE00, CRHODE, RHOLM)
@@ -1048,7 +1049,7 @@
         
       END SUBROUTINE SOLVEBESL_Q
 
-      SUBROUTINE WRITE_POTCAR (INFO, FROM_PP, Grid, PAW)
+      SUBROUTINE WRITE_POTCAR (INFO, FROM_PP, Grid, COREDEN, PAW, POTAE)
 !         TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
          TYPE(potcar), POINTER :: FROM_PP
          TYPE(INFO_STRUCT) :: INFO
@@ -1059,13 +1060,18 @@
 !      CHARACTER*40 SZNAMP         ! header
       CHARACTER*80 :: CSEL
       CHARACTER(LEN=4) :: PARAM_CHARACTER
-      REAL(q)  ::   POTCAR_PARAM
+      REAL(q)  ::   POTCAR_PARAM, COREDEN(Grid%n), POTAE(Grid%n)
+!      REAL(q)  ::   WAE(Grid%n,PAW%nbase), WPS(Grid%n,PAW%nbase)
+      REAL(q)  ::   WAE(Grid%n), WPS(Grid%n)
       INTEGER  ::   XC_TYPE, L1, L2, NMAX, NRANGE
       REAL(q), ALLOCATABLE :: POTCAR_DATA(:)
       REAL(q), ALLOCATABLE :: SPLINE_COEF(:,:), SPLINE_VALUE(:), SPLINE_DATA(:)
       LOGICAL  ::   PARAM_LOG
 
       ALLOCATE(POTCAR_DATA(NPSPTS))
+      ALLOCATE(SPLINE_VALUE(FROM_PP%R%NMAX))
+      ALLOCATE(SPLINE_DATA(Grid%n))
+      ALLOCATE(SPLINE_COEF(1:3, 1:Grid%n))
 
       OPEN(UNIT=10,FILE='POTCAR',STATUS='OLD',IOSTAT=IERR)
       IF (IERR/=0) THEN
@@ -1170,27 +1176,44 @@
       WRITE(88,'(A80)') CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
       WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!     ALLOCATE(SPLINE_VALUE(FROM_PP%R%NMAX))
-!     ALLOCATE(SPLINE_DATA(Grid%n))
-!     ALLOCATE(SPLINE_COEF(1:3, 1:Grid%n))
-!     CALL SPLINE(Grid%r*AUTOA, PAW%tcore*AUTOA, SPLINE_COEF(1,1:Grid%n),  &
-!     &       SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
-!     DO I=1, FROM_PP%R%NMAX
-!         SPLINE_VALUE(I) = ISPLINE(FROM_PP%R(I), Grid%r*AUTOA, PAW%tcore*AUTOA,  &
-!     &      SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
-!     ENDDO
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+
 !!!!!            aepotential              !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
-      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+      DO I = 1, Grid%n
+         POTAE(I) = -POTAE(I)/Grid%r(I)*RYTOEV
+      ENDDO
+      CALL SPLINE(Grid%r*AUTOA, POTAE, SPLINE_COEF(1,1:Grid%n),  &
+     &       SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+      DO I=1, FROM_PP%R%NMAX
+          SPLINE_VALUE(I) = ISPLINE(FROM_PP%R%R(I), Grid%r*AUTOA, POTAE,  &
+     &      SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+!                  WRITE(99,*) FROM_PP%R%R(I), FROM_PP%POTAE(I), SPLINE_VALUE(I)
+      ENDDO
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+      WRITE(88,'(5E20.12)') (SPLINE_VALUE (I),I=1,FROM_PP%R%NMAX)
+
 !!!!!        core charge-density          !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
-      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+      DO I = 1, Grid%n
+!         COREDEN(I) = COREDEN(I)/(SCALE*AUTOA)/(SCALE*AUTOA) 
+         COREDEN(I) = COREDEN(I)/(SCALE*AUTOA)
+      ENDDO
+      CALL SPLINE(Grid%r*AUTOA, COREDEN, SPLINE_COEF(1,1:Grid%n),  &
+     &       SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+      DO I=1, FROM_PP%R%NMAX
+          SPLINE_VALUE(I) = ISPLINE(FROM_PP%R%R(I), Grid%r*AUTOA, COREDEN,  &
+     &      SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+                  WRITE(99,*) FROM_PP%R%R(I), FROM_PP%RHOAE(I), -SPLINE_VALUE(I)
+      ENDDO
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+      WRITE(88,'(5E20.12)') (-SPLINE_VALUE (I),I=1,FROM_PP%R%NMAX)
+
 !!!!!       kinetic energy-density        !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
@@ -1215,17 +1238,56 @@
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
-      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      DO I = 1, Grid%n
+         COREDEN(I) = PAW%tcore(I)*AUTOA
+      ENDDO
+      CALL SPLINE(Grid%r*AUTOA, COREDEN, SPLINE_COEF(1,1:Grid%n),  &
+     &       SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+      DO I=1, FROM_PP%R%NMAX
+          SPLINE_VALUE(I) = ISPLINE(FROM_PP%R%R(I), Grid%r*AUTOA, COREDEN,  &
+     &      SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+!                  WRITE(99,*) FROM_PP%R%R(I), FROM_PP%RHOPS(I), SPLINE_VALUE(I)
+      ENDDO
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+      WRITE(88,'(5E20.12)') (SPLINE_VALUE (I),I=1,FROM_PP%R%NMAX)
 
 !!!!!     wave-function     !!!!!
       WRITE(6,*) 'nbase=', PAW%nbase
       DO I = 1, PAW%nbase
-        DO J = 1, 2
+         !!!!!   pseudo  wave-function   !!!!!
            READ(10,'(A80)') CSEL
            WRITE(88,'(A80)') CSEL
            READ(10,*) (POTCAR_DATA (K),K=1,FROM_PP%R%NMAX)
-           WRITE(88,'(5E20.12)') (POTCAR_DATA (K),K=1,FROM_PP%R%NMAX)
-        ENDDO 
+           DO K = 1, Grid%n
+              WPS(K) = PAW%tphi(K,I)/SQRT(AUTOA)
+           ENDDO
+           CALL SPLINE(Grid%r*AUTOA, WPS, SPLINE_COEF(1,1:Grid%n),  &
+     &             SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+           DO K=1, FROM_PP%R%NMAX
+                  SPLINE_VALUE(K) = ISPLINE(FROM_PP%R%R(K), Grid%r*AUTOA, WPS,  &
+     &           SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+!                  WRITE(99,*) FROM_PP%R%R(K), FROM_PP%WPS(K,I), SPLINE_VALUE(K)
+           ENDDO
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+           WRITE(88,'(5E20.12)') (SPLINE_VALUE (K),K=1,FROM_PP%R%NMAX)
+
+         !!!!!   ae  wave-function   !!!!!
+           READ(10,'(A80)') CSEL
+           WRITE(88,'(A80)') CSEL
+           READ(10,*) (POTCAR_DATA (K),K=1,FROM_PP%R%NMAX)
+           DO K = 1, Grid%n
+              WAE(K) = PAW%phi(K,I)/SQRT(AUTOA)
+           ENDDO
+           CALL SPLINE(Grid%r*AUTOA, WAE, SPLINE_COEF(1,1:Grid%n),  &
+     &             SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+           DO K=1, FROM_PP%R%NMAX
+                  SPLINE_VALUE(K) = ISPLINE(FROM_PP%R%R(K), Grid%r*AUTOA, WAE,  &
+     &           SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+!                  WRITE(99,*) FROM_PP%R%R(K), FROM_PP%WAE(K,I), SPLINE_VALUE(K)
+           ENDDO
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+           WRITE(88,'(5E20.12)') (SPLINE_VALUE (K),K=1,FROM_PP%R%NMAX)
       ENDDO
       WRITE(88,*) 'End of Dataset'
 100   CONTINUE
@@ -1233,7 +1295,7 @@
 500      FORMAT(F19.13, 6X, A1)
 600      FORMAT(I12, F19.15)
       DEALLOCATE(POTCAR_DATA)
-!      DEALLOCATE(SPLINE_COEF, SPLINE_VALUE, SPLINE_DATA)
+      DEALLOCATE(SPLINE_COEF, SPLINE_VALUE, SPLINE_DATA)
       CLOSE(10)
       CLOSE(88)
 
@@ -1264,6 +1326,9 @@
       double precision h
 
          gap = n-1
+         b(1:n) = 0.d0
+         c(1:n) = 0.d0
+         d(1:n) = 0.d0
 ! check input
          if ( n < 2 ) return
          if ( n < 3 ) then
