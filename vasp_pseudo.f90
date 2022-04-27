@@ -576,7 +576,7 @@
 !        CALL FOURPOT_TO_Q()
 
          WRITE(6, *) 'WRITE_POTCAR'
-         CALL WRITE_POTCAR(INFO, PP)
+         CALL WRITE_POTCAR(INFO, PP, Grid, PAW)
 
 !        deallocate(coreden)
          DEALLOCATE(RHO, V, RHOAE00, CRHODE, RHOLM)
@@ -1048,18 +1048,21 @@
         
       END SUBROUTINE SOLVEBESL_Q
 
-      SUBROUTINE WRITE_POTCAR (INFO, FROM_PP)
+      SUBROUTINE WRITE_POTCAR (INFO, FROM_PP, Grid, PAW)
 !         TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
          TYPE(potcar), POINTER :: FROM_PP
          TYPE(INFO_STRUCT) :: INFO
          TYPE(in_struct) IO
-!         TYPE(PseudoInfo) :: PAW
+         TYPE(PseudoInfo) :: PAW
+         Type(GridInfo) :: Grid
+
 !      CHARACTER*40 SZNAMP         ! header
       CHARACTER*80 :: CSEL
       CHARACTER(LEN=4) :: PARAM_CHARACTER
       REAL(q)  ::   POTCAR_PARAM
-      INTEGER  ::   XC_TYPE
+      INTEGER  ::   XC_TYPE, L1, L2, NMAX, NRANGE
       REAL(q), ALLOCATABLE :: POTCAR_DATA(:)
+      REAL(q), ALLOCATABLE :: SPLINE_COEF(:,:), SPLINE_VALUE(:), SPLINE_DATA(:)
       LOGICAL  ::   PARAM_LOG
 
       ALLOCATE(POTCAR_DATA(NPSPTS))
@@ -1118,19 +1121,263 @@
       READ(10,*) (POTCAR_DATA (I),I=1,NPSPTS)
       WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
 
-!!!!!   NON LOCAL PART    !!!!!
+!!!!!   NON LOCAL PART PROJECTOR   !!!!!
+!      WRITE(6,*) 'nbase=',PAW%nbase, PAW%l(PAW%nbase)
       READ(10,*) POTCAR_PARAM, PARAM_CHARACTER
       WRITE(88,500) POTCAR_PARAM, PARAM_CHARACTER
+      DO L = 0,  PAW%l(PAW%nbase)
+        READ(10,'(A80)') CSEL
+        WRITE(88,'(A80)') CSEL
+        READ(10,*) L1, NL1, POTCAR_PARAM
+        WRITE(88,'(2I12, F19.14)') L1, NL1, POTCAR_PARAM
+        READ(10,*) (POTCAR_DATA (I),I=1,4)
+        WRITE(88,'(F19.14, 2F24.13)') (POTCAR_DATA (I),I=1,4)
 
+        DO LI = 1, NL1
+        !!!!!   RECIPROCAL SPACE PART   !!!!!
+           READ(10,'(A80)') CSEL
+           WRITE(88,'(A80)') CSEL
+           WRITE(6,*) 'NPSNL=', NPSNL
+           READ(10,*) (POTCAR_DATA (I),I=1,NPSNL)
+           WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSNL)
+       !!!!!   REAL SPACE PART   !!!!!
+           READ(10,'(A80)') CSEL
+           WRITE(88,'(A80)') CSEL
+           READ(10,*) (POTCAR_DATA (I),I=1,NPSNL)
+           WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSNL)
+        ENDDO
+      ENDDO
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!        PAW PART        !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) NMAX, POTCAR_PARAM
+      WRITE(88,600) FROM_PP%R%NMAX, POTCAR_PARAM
+      READ(10,*) 
+      WRITE(88,*)'(5E20.12)' 
+
+      NRANGE = (PAW%l(PAW%nbase)+1)**4
+      DO I =1, 2
+!!!!!   augmentation charge (non spherical)   !!!!!
+         READ(10,'(A80)') CSEL
+         WRITE(88,'(A80)') CSEL
+         READ(10,*) (POTCAR_DATA (J),J=1,NRANGE)
+         WRITE(88,'(5E20.12)') (POTCAR_DATA (J),J=1,NRANGE)
+      ENDDO
+!!!!!            grid              !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!     ALLOCATE(SPLINE_VALUE(FROM_PP%R%NMAX))
+!     ALLOCATE(SPLINE_DATA(Grid%n))
+!     ALLOCATE(SPLINE_COEF(1:3, 1:Grid%n))
+!     CALL SPLINE(Grid%r*AUTOA, PAW%tcore*AUTOA, SPLINE_COEF(1,1:Grid%n),  &
+!     &       SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+!     DO I=1, FROM_PP%R%NMAX
+!         SPLINE_VALUE(I) = ISPLINE(FROM_PP%R(I), Grid%r*AUTOA, PAW%tcore*AUTOA,  &
+!     &      SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+!     ENDDO
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+!!!!!            aepotential              !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!        core charge-density          !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!       kinetic energy-density        !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!    mkentic energy-density pseudized    !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!      local pseudo-potential core      !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!     pseudo-potential valence only      !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+!!!!!     core-charge density (pseudized)     !!!!!
+      READ(10,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+
+!!!!!     wave-function     !!!!!
+      WRITE(6,*) 'nbase=', PAW%nbase
+      DO I = 1, PAW%nbase
+        DO J = 1, 2
+           READ(10,'(A80)') CSEL
+           WRITE(88,'(A80)') CSEL
+           READ(10,*) (POTCAR_DATA (K),K=1,FROM_PP%R%NMAX)
+           WRITE(88,'(5E20.12)') (POTCAR_DATA (K),K=1,FROM_PP%R%NMAX)
+        ENDDO 
+      ENDDO
+      WRITE(88,*) 'End of Dataset'
 100   CONTINUE
 
 500      FORMAT(F19.13, 6X, A1)
+600      FORMAT(I12, F19.15)
       DEALLOCATE(POTCAR_DATA)
+!      DEALLOCATE(SPLINE_COEF, SPLINE_VALUE, SPLINE_DATA)
       CLOSE(10)
       CLOSE(88)
 
        END SUBROUTINE WRITE_POTCAR
 
+      subroutine spline (x, y, b, c, d, n)
+!======================================================================
+!  Calculate the coefficients b(i), c(i), and d(i), i=1,2,...,n
+!  for cubic spline interpolation
+!  s(x) = y(i) + b(i)*(x-x(i)) + c(i)*(x-x(i))**2 + d(i)*(x-x(i))**3
+!  for  x(i) <= x <= x(i+1)
+!  Alex G: January 2010
+!----------------------------------------------------------------------
+!  input..
+!  x = the arrays of data abscissas (in strictly increasing order)
+!  y = the arrays of data ordinates
+!  n = size of the arrays xi() and yi() (n>=2)
+!  output..
+!  b, c, d  = arrays of spline coefficients
+!  comments ...
+!  spline.f90 program is based on fortran version of program spline.f
+!  the accompanying function fspline can be used for interpolation
+!======================================================================
+      implicit none
+      integer n
+      double precision x(n), y(n), b(n), c(n), d(n)
+      integer i, j, gap
+      double precision h
+
+         gap = n-1
+! check input
+         if ( n < 2 ) return
+         if ( n < 3 ) then
+             b(1) = (y(2)-y(1))/(x(2)-x(1))   ! linear interpolation
+             c(1) = 0.
+             d(1) = 0.
+             b(2) = b(1)
+             c(2) = 0.
+             d(2) = 0.
+             return
+         end if
+!
+! step 1: preparation
+!
+        d(1) = x(2) - x(1)
+        c(2) = (y(2) - y(1))/d(1)
+        do i = 2, gap
+           d(i) = x(i+1) - x(i)
+           b(i) = 2.0*(d(i-1) + d(i))
+           c(i+1) = (y(i+1) - y(i))/d(i)
+           c(i) = c(i+1) - c(i)
+        end do
+!
+! step 2: end conditions 
+!
+        b(1) = -d(1)
+        b(n) = -d(n-1)
+        c(1) = 0.0
+        c(n) = 0.0
+        if (n /= 3) then
+           c(1) = c(3)/(x(4)-x(2)) - c(2)/(x(3)-x(1))
+           c(n) = c(n-1)/(x(n)-x(n-2)) - c(n-2)/(x(n-1)-x(n-3))
+           c(1) = c(1)*d(1)**2/(x(4)-x(1))
+           c(n) = -c(n)*d(n-1)**2/(x(n)-x(n-3))
+        end if
+!
+! step 3: forward elimination 
+!
+        do i = 2, n
+           h = d(i-1)/b(i-1)
+           b(i) = b(i) - h*d(i-1)
+           c(i) = c(i) - h*c(i-1)
+        end do
+!
+! step 4: back substitution
+!
+        c(n) = c(n)/b(n)
+        do j = 1, gap
+           i = n-j
+           c(i) = (c(i) - d(i)*c(i+1))/b(i)
+        end do
+!
+! step 5: compute spline coefficients
+!
+        b(n) = (y(n) - y(gap))/d(gap) + d(gap)*(c(gap) + 2.0*c(n))
+        do i = 1, gap
+           b(i) = (y(i+1) - y(i))/d(i) - d(i)*(c(i+1) + 2.0*c(i))
+           d(i) = (c(i+1) - c(i))/d(i)
+           c(i) = 3.*c(i)
+        end do
+        c(n) = 3.0*c(n)
+        d(n) = d(n-1)
+      end subroutine spline
+
+      function ispline(u, x, y, b, c, d, n)
+!======================================================================
+! function ispline evaluates the cubic spline interpolation at point z
+! ispline = y(i)+b(i)*(u-x(i))+c(i)*(u-x(i))**2+d(i)*(u-x(i))**3
+! where  x(i) <= u <= x(i+1)
+!----------------------------------------------------------------------
+! input..
+! u       = the abscissa at which the spline is to be evaluated
+! x, y    = the arrays of given data points
+! b, c, d = arrays of spline coefficients computed by spline
+! n       = the number of data points
+! output:
+! ispline = interpolated value at point u
+!=======================================================================
+        implicit none
+        double precision ispline
+        integer n
+        double precision  u, x(n), y(n), b(n), c(n), d(n)
+        integer i, j, k
+        double precision dx
+
+! if u is ouside the x() interval take a boundary value (left or right)
+        if (u <= x(1)) then
+           ispline = y(1)
+           return
+        end if
+        if (u >= x(n)) then
+           ispline = y(n)
+           return
+        end if
+
+!*
+!  binary search for for i, such that x(i) <= u <= x(i+1)
+!*
+        i = 1
+        j = n+1
+        do while (j > i+1)
+           k = (i+j)/2
+           if (u < x(k)) then
+              j=k
+           else
+              i=k
+           end if
+        end do
+!*
+!  evaluate spline interpolation
+!*
+        dx = u - x(i)
+        ispline = y(i) + dx*(b(i) + dx*(c(i) + dx*d(i)))
+      end function ispline
 
 
       END MODULE VASP_POTCAR
