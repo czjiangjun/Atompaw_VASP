@@ -68,8 +68,8 @@ def Data_Fig(Properties, type, data, name):
     TYPE = type+"-"+data
 #    TYPE2 = "ATOM-"+type
 
-    plot_command1 = "plot "+'"'+type+'_'+data +'" '+'u 1:2 w p pt 3 ps 1.2 title "'+TYPE +'"'
-    plot_command2 = "replot "+'"'+type+'_'+data +'" '+'u 1:3 w l lt 5 lw 1.2 title "'+TYPE +'"'
+    plot_command1 = '"'+type+'_'+data +'" '+'u 1:2 w p pt 3 ps 1.2 title "'+TYPE +'", '
+    plot_command2 = '"'+type+'_'+data +'" '+'u 1:3 w l lt 5 lw 1.2 title "'+TYPE +'\n"'
 #    plot_command_ATOM = "replot "+'"ATOM_'+data +'" '+'u 1:2 w l lt 5 lw 1.8 title "'+TYPE2+'"'
 #    print(plot_command_VASP)
 #    exit ()
@@ -81,8 +81,7 @@ def Data_Fig(Properties, type, data, name):
        gp.c('set xrange[0:1.5]')
        gp.c('set yrange[-1.5:1.5]')
 
-    gp.c(plot_command1)
-    gp.c(plot_command2)
+    gp.c("plot "+ plot_command1 + plot_command2)
     # gp.c('plot "VASP_WAE" u 1:2 w p pt 3 ps 2 title "VASP-AE"')
     # gp.c(plot_command_ATOM)
     # gp.p('myfigure.ps')
@@ -92,8 +91,8 @@ def Data_compare_Fig(Properties, data, name):
     TYPE1 = "VASP-"+data
     TYPE2 = "ATOM-"+data
 
-    plot_command_VASP = "plot "+'"VASP_'+data +'" '+'u 1:2 w p pt 1 lw 1.0 title "'+TYPE1+'"'
-    plot_command_ATOM = "replot "+'"ATOM_'+data +'" '+'u 1:2 w l lt 3 lw 1.5 title "'+TYPE2+'"'
+    plot_command_VASP = '"VASP_'+data +'" '+'u 1:2 w p pt 1 lw 1.0 title "'+TYPE1+'", '
+    plot_command_ATOM = '"ATOM_'+data +'" '+'u 1:2 w l lt 3 lw 1.5 title "'+TYPE2+'"'
 #    plot_command_ATOM = "replot "+'"VASP_'+data +'" '+'u 1:3 w l lt 5 lw 1.8 title "'+TYPE2+'"'
 #    print(plot_command_VASP)
 #    exit ()
@@ -119,8 +118,7 @@ def Data_compare_Fig(Properties, data, name):
     else:
 #       gp.c('set yrange[-50:250]')
        gp.c('set yrange[0:4]')
-    gp.c(plot_command_VASP)
-    gp.c(plot_command_ATOM)
+    gp.c("plot" + plot_command_VASP + plot_command_ATOM)
     # gp.c('plot "VASP_WAE" u 1:2 w p pt 3 ps 2 title "VASP-AE"')
     # gp.c(plot_command_ATOM)
     # gp.p('myfigure.ps')
@@ -131,9 +129,9 @@ def Data_compare_Fig2(Properties, data, name):
     TYPE2 = "ATOM-"+data
     TYPE3 = "VASP-"+"WAV-CAL"
 
-    plot_command1 = "plot "+'"VASP_'+data +'" '+'u 1:2 w p pt 3 lw 1.2 title "'+TYPE1+'"'
-    plot_command2 = "replot "+'"ATOM_'+data +'" '+'u 1:2 w l lt 5 lw 1.8 title "'+TYPE2+'"'
-    plot_command3 = "replot "+'"VASP_'+data +'" '+'u 1:3 w l lt 7 lw 1.8 title "'+TYPE3+'"'
+    plot_command1 = '"VASP_'+data +'" '+'u 1:2 w p pt 3 lw 1.2 title "'+TYPE1+'", '
+    plot_command2 = '"ATOM_'+data +'" '+'u 1:2 w l lt 5 lw 1.8 title "'+TYPE2+'", '
+    plot_command3 = '"VASP_'+data +'" '+'u 1:3 w l lt 7 lw 1.8 title "'+TYPE3+'"'
 #    print(plot_command_VASP)
 #    exit ()
     Fig_title = "set title "+ '"' + name +'"'
@@ -160,9 +158,7 @@ def Data_compare_Fig2(Properties, data, name):
     else:
 #       gp.c('set yrange[-50:250]')
        gp.c('set yrange[0:4]')
-    gp.c(plot_command1)
-    gp.c(plot_command2)
-    gp.c(plot_command3)
+    gp.c("plot" + plot_command1+plot_command2+plot_command3)
     # gp.c('plot "VASP_WAE" u 1:2 w p pt 3 ps 2 title "VASP-AE"')
     # gp.c(plot_command_ATOM)
     # gp.p('myfigure.ps')
