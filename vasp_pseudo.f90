@@ -52,6 +52,7 @@
          REAL(q) :: DHARTREE, QCORE,SCALE, DOUBLEAE, EXCG
          REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOPS00(:)
          REAL(q), ALLOCATABLE :: POTAEC(:), POTPSC_TEST(:), POT_TEST(:), POTAE_TEST(:), POTPS_TEST(:)
+         REAL(q), ALLOCATABLE :: POTPSC_CHECK(:)
          REAL(q), ALLOCATABLE :: CRHODE(:,:)
          REAL(q), ALLOCATABLE :: RHOLM(:), DLM(:)!, GAUSSIAN(:)
          CHARACTER(LEN=2) :: TYPE(1)
@@ -147,6 +148,7 @@
       ALLOCATE(POT(PP%R%NMAX, LMMAX,1), POTAEC(PP%R%NMAX))
       ALLOCATE(POTAE_EFF(PP%R%NMAX),DPOTAE_EFF(PP%R%NMAX), POTPS_EFF(PP%R%NMAX) )
       ALLOCATE(POT_TEST(PP%R%NMAX),POTAE_TEST(PP%R%NMAX), POTPSC_TEST(PP%R%NMAX) )
+      ALLOCATE(POTPSC_CHECK(PP%R%NMAX))
       ALLOCATE(POTPS_G(NPSPTS))
       ALLOCATE(POTPS_TEST(PP%R%NMAX))
 !      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
@@ -264,6 +266,7 @@
 
       RHO = 0
       POTPSC_TEST = 0
+      POTPSC_CHECK = 0
       POT_TEST = 0
 !!!!!!!!!!!!!  POTPS = V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c]  !!!!!!!!!!!!!!!!!!!!!!!!
 ! RHO is \tilde RHO + \hat n
@@ -307,9 +310,14 @@
          OPEN(UNIT=21,FILE='VASP_POTPSC',STATUS='OLD')
       ENDIF
 
+!   ---------------- !!!!!! FOR CHECK !!!!! -------------------
+      
+       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
+     &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
+
       DO j=1, PP%R%NMAX
          WRITE(IU17,'(6f20.8)') PP%R%R(j), PP%POTPSC(j), POTPSC_TEST(j),  &
-     &                         PP%POTPSC(j) + PP%POTPS(j)
+     &                         PP%POTPSC(j) + PP%POTPS(j), POTPSC_CHECK(j)
       ENDDO
 
 
