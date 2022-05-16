@@ -215,7 +215,7 @@
       CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
                    RHO, PP%RHOAE, POT_TEST, POT, DOUBLEAE, EXCG)
 !      POTAE_TEST(:) =  -POT(:,1,1)/SCALE + PP%ZVALF_ORIG/PP%R%R(:)/SCALE/SQRT(2.0)
-      POTAE_TEST(:) =  -POT(:,1,1)/SCALE + Z/PP%R%R(:)/FELECT
+      POTAE_TEST(:) =  -POT(:,1,1)/SCALE + FELECT*PP%ZVALF_ORIG*ERRF(PP%R%R(:)/AUTOA)/PP%R%R(:)
 
 !!!!!!!!!!!!!!!!!   POTAE_EFF = 1/2.0*\{V_H[n_v+n_c] !+V_XC[n_v+n_c]\}  !!!!!!!!!!!!!!!!!!
 !      POTAE_EFF(:) =  [POTAE_TEST(:)+POTAEC(:)]/2.0
