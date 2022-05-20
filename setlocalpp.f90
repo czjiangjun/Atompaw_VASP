@@ -607,7 +607,7 @@ END FUNCTION WINDOW
          ENDIF
       ENDDO
 !      WRITE(6,"(2F14.7)") (R(K), POTPSC(K)*R(K)/RYTOEV/AUTOA,K=1,NMAX)
-      WRITE(6,"(2F14.7)") (R(K), POTPSC(K), K=1,NMAX)
+!      WRITE(6,"(2F14.7)") (R(K), POTPSC(K), K=1,NMAX)
 
       END
 
