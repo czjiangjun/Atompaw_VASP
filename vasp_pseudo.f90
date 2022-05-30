@@ -48,7 +48,7 @@
          INTEGER :: NTYP, NTYPD, LDIM, LDIM2, LMDIM,CHANNELS, LMAX, LMMAX, LI, MI, LMI
          INTEGER :: LMAX_TABLE, LYMAX 
          REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
-         REAL(q) ROOT(2), QR, Qloc
+         REAL(q) ROOT(2), QR, Qloc, R_CUT
          REAL(q) :: DHARTREE, QCORE,SCALE, DOUBLEAE, EXCG
          REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOPS00(:)
          REAL(q), ALLOCATABLE :: POTAEC(:), POTPSC_TEST(:), POT_TEST(:), POTAE_TEST(:), POTPS_TEST(:)
@@ -199,25 +199,23 @@
       CALL RAD_POT_HAR(0, PP%R, POTAEC, PP%RHOAE, DHARTEE)
       DO j=1, PP%R%NMAX
 !         WRITE(6,*) 'TEST =', Z/PP%R%R(j)*FELECT
-         POTAEC(j) = - POTAEC(j)/SCALE + Z/PP%R%R(j)*FELECT  !!!   V_H[n_Zc] =  V_H[n_c] - Z/r 
+         POTAEC(j) =   POTAEC(j)/SCALE - Z/PP%R%R(j)*FELECT  !!!   V_H[n_Zc] =  V_H[n_c] - Z/r 
       ENDDO
 !      DO j =1, PP%R%NMAX
 !         WRITE(6,*) POTAEC(j)
 !      ENDDO
 !      WRITE(6,*)
 
-!!!!!!!!!!!!!!!!!!!!!!!! POTAE_TEST = \Delta V_Z* +  V_H[n_v] +V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!  \Delta V_Z* <--- Hydrogen-liked ATOMS    !!!!     
-!!!!  POTENTIAL FROM Z*ERRF(PP%R%R(:)*64/AUTOA) * FELECT/PP%R%R(:) !!!!
+!!!!!!!!!!!!!!!!!!!!!!!! POTAE_TEST =  V_H[n_v] +V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!
       POT = 0
       POT_TEST = 0
       CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
       CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
                    RHO, PP%RHOAE, POT_TEST, POT, DOUBLEAE, EXCG)
+      POTAE_TEST(:) =  POT(:,1,1)/SCALE                       !!!    POTAE = V_H[n_v] +V_XC[n_v+n_c] 
 !      POTAE_TEST(:) =  -POT(:,1,1)/SCALE + PP%ZVALF_ORIG/PP%R%R(:)/SCALE/SQRT(2.0)
-      WRITE(6,*) 'V_POTAE'
       DO j=1, PP%R%NMAX
-         POTAE_TEST(j) = - POT(j,1,1)/SCALE + FELECT*Z*(1.0-ERRF(PP%R%R(j)/2.0/AUTOA))/PP%R%R(j)
+!         POTAE_TEST(j) = - POT(j,1,1)/SCALE + FELECT*Z*(1.0-ERRF(PP%R%R(j)/2.0/AUTOA))/PP%R%R(j)
          WRITE(6,'(8f20.8)') PP%R%R(j), POT(j,1,1)/SCALE, ERRF(PP%R%R(j)/AUTOA), &
      &             PP%POTAE(j)+POT(j,1,1)/SCALE, FELECT*Z*ERRF(PP%R%R(j)/PP%R%R(200))/PP%R%R(j) , &
      &             FELECT*Z/PP%R%R(j)/(PP%POTAE(j)+POT(j,1,1)/SCALE )
@@ -236,8 +234,8 @@
       ENDIF
 !
       DO j=1, PP%R%NMAX
-         WRITE(IU15,'(8f20.8)') PP%R%R(j), PP%POTAE(j), POTAE_TEST(j),  &
-     &                           POTAEC(j), &
+         WRITE(IU15,'(8f20.8)') PP%R%R(j), PP%POTAE(j), - POTAE_TEST(j),  &
+     &                           -POTAEC(j), &
      &                           POTAE_EFF(j)
       ENDDO
 
@@ -246,21 +244,20 @@
          POTPS_EFF(j) = POTAE_EFF(j)
       ENDDO
       CALL GRAD(PP%R, POTAE_EFF, DPOTAE_EFF)
-!      CALL GRAD(PP%R, POTAEC, DPOTAE_EFF)
 
 !      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
-      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX-31)/POTAE_EFF(PP%R%NMAX-31)
+      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX-41)/POTAE_EFF(PP%R%NMAX-41)
 !      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
       beta = 1.0
 
       CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
 !      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
 !      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
-      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX-31)
+      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX-41)
 !      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
-      alpha = POTAE_EFF(PP%R%NMAX-31)*PP%R%R(PP%R%NMAX-31)/sin(QR)
+      alpha = POTAE_EFF(PP%R%NMAX-41)*PP%R%R(PP%R%NMAX-41)/sin(QR)
 !      WRITE(6,*) 'alpha=' , alpha
-      DO j = 1, PP%R%NMAX-31
+      DO j = 1, PP%R%NMAX-41
          QR = Qloc*PP%R%R(j)
          POTPS_EFF(j) = alpha*sin(QR)/PP%R%R(j)
 !         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
@@ -294,7 +291,7 @@
                    RHO, PP%RHOPS, POTPSC_TEST, POT, DOUBLEAE, EXCG)
 !      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
 !                   RHO, PP%RHOPS, PP%POTPSC, POT, DOUBLEAE, EXCG)
-      POTPS_TEST(:) =  -POT(:,1,1)/SCALE
+      POTPS_TEST(:) =  POT(:,1,1)/SCALE
 
       OPEN(UNIT=25,FILE='VASP_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
@@ -302,11 +299,42 @@
       ENDIF
 
       DO j=1, PP%R%NMAX
-         WRITE(25,'(6f20.8)') PP%R%R(j), PP%POTPS(j), POTPS_TEST(j), POTAE_EFF(j), POTPS_EFF(j)
+         WRITE(25,'(6f20.8)') PP%R%R(j), PP%POTPS(j), -POTPS_TEST(j), POTAE_EFF(j), POTPS_EFF(j)
       ENDDO
 
-!!!!!!!!!!!!!  POTPSC = POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
-      POTPSC_TEST(:) =  POTPS_EFF(:) - POTPS_TEST(:)
+!!!!!!!!!!!!!  Method_1:   POTPSC = POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
+      POTPSC_TEST(:) =  - POTPS_EFF(:) - POTPS_TEST(:)
+
+!!!!!!!!!!!!   Method_2:   POTPSC = A*sin(qloc*r)/r FROM POTAEC DIRACTLY     !!!!!!!!!!!!!!!!!!!!!!!!
+      DO j = 1, PP%R%NMAX
+         POTPSC_TEST(j) = POTAEC(j)
+      ENDDO
+      CALL GRAD(PP%R, POTAEC, DPOTAE_EFF)
+
+!      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
+      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX-38)/POTAEC(PP%R%NMAX-38)
+!      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
+      beta = 1.0
+
+      CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
+!      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
+!      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
+      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX-38)
+!      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
+      alpha = POTAEC(PP%R%NMAX-38)*PP%R%R(PP%R%NMAX-38)/sin(QR)
+!      WRITE(6,*) 'alpha=' , alpha
+      DO j = 1, PP%R%NMAX-38
+         QR = Qloc*PP%R%R(j)
+         POTPSC_TEST(j) = alpha*sin(QR)/PP%R%R(j)
+!         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
+!         WRITE(6,'(5f20.8)') PP%R%R(j), PP%POTPSC(j), POTPS_EFF(j), PP%POTAE(j), PP%POTPS(j)
+      ENDDO
+
+
+
+
+
+
 
       OPEN(UNIT=21,FILE='VASP_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
@@ -402,7 +430,7 @@
       ENDIF
           WRITE(6,*) 'AEPOT calcualted'
 
-!!!!!!!!! POTAEC = V_Z + V_H[n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!! POTAEC = V_H[n_Zc] = V_Z + V_H[n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
           den = 0.d0
           call SetPOT(Grid, FC%coreden, den, PotHr, PotXCr, .TRUE.)
 !!!!      VASP_V_Z = - Pot_AE%rvn(j)/Grid%r(j)*RYTOEV      !!!!  FOR the factor FELECT
@@ -411,32 +439,21 @@
           PotAECr(:) =  PotHr(:) + Pot_AE%rvn(:)                     !!!!  V_Z + V_H[n_c] 
 !           PotAECr(:) = PotHr(:)                                    !!!!   V_H[n_c]
 
-!!!!!!!!! the potential closed to the nuclear is A BIG PROBLEM !!!!!!!!!!!
 !!!!!!!!! POTAE = \Delta V_Z* + V_H[n_v] + V_XC[n_c+n_v] !!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!     \Delta V_Z* <--- Hydrogen-liked ATOMS    !!!!     
-!!!!    POTENTIAL FROM Z*ERRF(PP%R%R(:)*64/AUTOA) * FELECT/PP%R%R(:) !!!!
           call SetPOT(Grid, FC%coreden, FC%valeden, PotHr, PotXCr, .FALSE., .TRUE.)
 !!!!      VASP_POTAE = -POTAEr(j)/Grid%r(j)*RYTOEV
-!          PotAEr(:) = PotHr(:)+PotXCr(:) - Q_v/SCALE/SQRT(2.0)/AUTOA/RYTOEV 
-          WRITE(6,*) 'A_POTAE'
-          DO j =1 , Grid%n
-              PotAEr(j) = PotHr(j)+PotXCr(j)                       !!!!  V_H[n_v] +V_XC[n_c+n_v]
-              PotAE00(j) = - (  PotAEr(j)    &
-     &                        + 2.0*Pot_AE%q*ERRF(Grid%r(j)*64.0))/Grid%r(j)
-              WRITE(6,'(8f20.8)') Grid%r(j)*AUTOA, (PotHr(j)+PotXCr(j))/Grid%r(j)*RYTOEV, &
-     &                 ERRF(Grid%r(j)),  2.0*Pot_AE%q*ERRF(Grid%r(j))/Grid%r(j)*RYTOEV
-          ENDDO
+          PotAEr(:) = PotHr(:)+PotXCr(:)
 
-!!!!!!!!!!!!!!!!!   POTAE_EFF = V_H[n_v]+ V_H[n_Zc] +V_XC[n_v+n_c]  !!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!   POTAE_EFF = V_H[n_Zc] + V_H[n_v]+ V_XC[n_v+n_c]  !!!!!!!!!!!!!!!!!!
 !!!!!!!!! POTAE_EFF ===> Pot_AE%rv
 !          call SetPOT(Grid, FC%coreden, FC%valeden, PotHr, PotXCr, .TRUE., .TRUE.)
-          PotATr(:) =  - PotAECr(:) + PotAEr(:) !+ Pot_AE%rvn(:) 
-!!!!      POT_AE%rv = PotAECr + PotAEr
+!          PotATr(:) = PotHr(:)+PotXCr(:)
+          PotATr(:) = -( PotAECr(:) + PotAEr(:))
 
           DO j=1,Grid%n 
-             WRITE(IU16,'(8f20.8)') Grid%r(j)*AUTOA, - PotAE00(j)*RYTOEV,            &   !!!  VASP_POT_AE
+             WRITE(IU16,'(8f20.8)') Grid%r(j)*AUTOA, - PotAEr(j)/Grid%r(j)*RYTOEV,   &  !!!  VASP_POT_AE
      &                                               - PotAECr(j)/Grid%r(j)*RYTOEV , &  !!!  VASP_POT_AEC 
-     &                      -PotATr(j)/Grid%r(j)*RYTOEV !, Pot_AE%rv(j)/Grid%r(j)*RYTOEV !!!  POTAE_EFF
+     &                       PotATr(j)/Grid%r(j)*RYTOEV !, Pot_AE%rv(j)/Grid%r(j)*RYTOEV !!!  POTAE_EFF
           ENDDO
 
 !!!!!!!!! tcore_den = sum_i B_i*sin(q_i r)/r !!!!!!!!!!!!!!!!!     
@@ -495,7 +512,8 @@
          ENDDO
 
 !!!!!!!!!!!!!!!!!!!! POT_tVeff FROM POT_EFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!     
-         call SetPOT_TEFF(Grid, Pot_eff, Pot_teff)
+         R_CUT = PP%R%R(PP%R%NMAX-44)/AUTOA
+         call SetPOT_TEFF(Grid, Pot_eff, Pot_teff, R_CUT)
          
 !!!!!!!!!! PSEUDO Calculations !!!!!!!!!!!!!!!!!!!!         
 !         nbase=PAW%nbase
@@ -592,9 +610,9 @@
          ENDDO
 !         STOP   !! POTPS_EFF TEST CORRECT
 
-!!!!!!!!!!!!!  POTPSC =! POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!  POTPSC = POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
          DO j =1, Grid%n
-            PotPSC(j)= -Pot_teff(j)+PotPS(j)
+            PotPSC(j)= -Pot_teff(j) - PotPS(j)
          ENDDO
 
          OPEN(UNIT=24,FILE='ATOM_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
@@ -602,15 +620,16 @@
              OPEN(UNIT=24,FILE='ATOM_POTPSC',STATUS='OLD')
          ENDIF
 
-         DO j=1, Grid%n
-            WRITE(IU20,'(6f20.8)') Grid%r(j)*AUTOA, PotPSC(j)*RYTOEV   !, -PotAECr(j)/Grid%r(j)*RYTOEV
-         ENDDO
+!         DO j=1, Grid%n
+!            WRITE(IU20,'(6f20.8)') Grid%r(j)*AUTOA, PotPSC(j)*RYTOEV   
+!         ENDDO
 
 !!   ---------------- !!!!!! POT_V[\tilde{n}_Zc] FROM POT_V[n_Zc] !!!!!  ----------------------    !!     
-         call SetPOT_TEFF(Grid, PotAECr/Grid%r, PotPSC)
-!         DO j=1, Grid%n
-!            WRITE(IU20,*) Grid%r(j)*AUTOA, -PotPSC(j)*RYTOEV   !, -PotAECr(j)/Grid%r(j)*RYTOEV
-!         ENDDO
+         R_CUT = PP%R%R(PP%R%NMAX-40)/AUTOA
+         call SetPOT_TEFF(Grid, PotAECr/Grid%r, PotPSC, R_CUT)
+         DO j=1, Grid%n
+            WRITE(IU20,'(6f20.8)') Grid%r(j)*AUTOA, PotPSC(j)*RYTOEV
+         ENDDO
 
 !   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POT_V[n_Zc] !!!!!  ----------------------    !     
 !        CALL FOURPOT_TO_Q()
@@ -1142,17 +1161,24 @@
       WRITE(88,'(F19.13)') POTCAR_PARAM
       WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
 
+      READ(10,'(1X,A1)') CSEL
+      IF (CSEL=='g') THEN
 !!!!!          XC_TYPE         !!!!!
-      READ(10,'(A80)') CSEL
-      WRITE(88,'(A80)') CSEL
-      READ(10,*) XC_TYPE
-      WRITE(88,'(I12)') XC_TYPE
+         WRITE(88,*) ' gradient corrections used for XC '
+         READ(10,*) XC_TYPE
+         WRITE(88,'(I12)') XC_TYPE
 
+        READ(10,'(A80)') CSEL
+        WRITE(88,'(A80)') CSEL
+      ENDIF
 !!!!!      PSPCOR             !!!!!
-      READ(10,'(A80)') CSEL
-      WRITE(88,'(A80)') CSEL
-      READ(10,*) (POTCAR_DATA (I),I=1,NPSPTS)
-      WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
+      IF (CSEL=='c') THEN
+         WRITE(88,*) ' core charge-density (partial) '
+         READ(10,*) (POTCAR_DATA (I),I=1,NPSPTS)
+         WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
+      ELSE
+!         NULLIFY(P(NTYP)%PSPCOR)
+      ENDIF
 
 !!!!!  KINETIC ENERGY PARTIAL     !!!!!
       READ(10,'(A80)') CSEL
