@@ -214,12 +214,12 @@
                    RHO, PP%RHOAE, POT_TEST, POT, DOUBLEAE, EXCG)
       POTAE_TEST(:) =  POT(:,1,1)/SCALE                       !!!    POTAE = V_H[n_v] +V_XC[n_v+n_c] 
 !      POTAE_TEST(:) =  -POT(:,1,1)/SCALE + PP%ZVALF_ORIG/PP%R%R(:)/SCALE/SQRT(2.0)
-      DO j=1, PP%R%NMAX
+!      DO j=1, PP%R%NMAX
 !         POTAE_TEST(j) = - POT(j,1,1)/SCALE + FELECT*Z*(1.0-ERRF(PP%R%R(j)/2.0/AUTOA))/PP%R%R(j)
-         WRITE(6,'(8f20.8)') PP%R%R(j), POT(j,1,1)/SCALE, ERRF(PP%R%R(j)/AUTOA), &
-     &             PP%POTAE(j)+POT(j,1,1)/SCALE, FELECT*Z*ERRF(PP%R%R(j)/PP%R%R(200))/PP%R%R(j) , &
-     &             FELECT*Z/PP%R%R(j)/(PP%POTAE(j)+POT(j,1,1)/SCALE )
-      ENDDO
+!         WRITE(6,'(8f20.8)') PP%R%R(j), POT(j,1,1)/SCALE, ERRF(PP%R%R(j)/AUTOA), &
+!     &             PP%POTAE(j)+POT(j,1,1)/SCALE, FELECT*Z*ERRF(PP%R%R(j)/PP%R%R(200))/PP%R%R(j) , &
+!     &             FELECT*Z/PP%R%R(j)/(PP%POTAE(j)+POT(j,1,1)/SCALE )
+!      ENDDO
 
 !!!!!!!!!!!!!!!!!   POTAE_EFF = V_H[n_Zc] + V_H[n_v] +V_XC[n_v+n_c]  !!!!!!!!!!!!!!!!!!
       POT = 0
@@ -336,9 +336,38 @@
          OPEN(UNIT=21,FILE='VASP_POTPSC',STATUS='OLD')
       ENDIF
 
+
+!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POTPS !!!!!  ----------------------    !     
+
+!!      CALL FOURPOT_TO_Q( PP%RDEP, POT, PP%PSP(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
+      POTPS_G(:) = 0.0
+!      POTPS_TEST(:) = POTPS_TEST(:)
+!      DO i = 1, PP%R%NMAX
+!          CALL RANDOM_SEED()
+!          CALL RANDOM_NUMBER(random_x)
+!          POTPSC_TEST(I) = -random_x
+!          WRITE(6,*) 'TEST=', POTPS_TEST(I)
+!      ENDDO
+
+!      POTPSC_CHECK(:) = PP%POTPSC(:)
+      POTPSC_CHECK(:) = POTPSC_TEST(:)
+      CALL FOURPOT_TO_Q_CHECK( PP%R%R(PP%R%NMAX)+1.0, PP%ZVALF_ORIG, POTPSC_CHECK,   &
+     &             POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
+!      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), POTPS_TEST, POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
+
+      OPEN(UNIT=23,FILE='VASP_G_POTEFF',STATUS='UNKNOWN',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=23,FILE='VASP_G_POTEFF',STATUS='OLD')
+      ENDIF
+      DO j=1, SIZE(PP%PSP,1)
+         WRITE(IU19,'(6f20.8)') PP%PSP(j,1), PP%PSP(j,2), POTPS_G(j)
+      ENDDO
+
 !   ---------------- !!!!!! FOR CHECK !!!!! -------------------
       
-       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
+!       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
+!     &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
+       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, POTPS_G, PP%PSGMAX/NPSPTS, &
      &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
 
       DO j=1, PP%R%NMAX
@@ -355,28 +384,7 @@
 !             WRITE(IU19,*)
 !             WRITE(IU19,*) PP%PSDMAX
 !             WRITE(IU19,*)
-
-!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POTPS !!!!!  ----------------------    !     
-
-!!      CALL FOURPOT_TO_Q( PP%RDEP, POT, PP%PSP(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
-      POTPS_G(:) = 0.0
-!      POTPS_TEST(:) = POTPS_TEST(:)
-!      DO i = 1, PP%R%NMAX
-!          CALL RANDOM_SEED()
-!          CALL RANDOM_NUMBER(random_x)
-!          POTPSC_TEST(I) = -random_x
-!          WRITE(6,*) 'TEST=', POTPS_TEST(I)
-!      ENDDO
-      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), POTPS_TEST, POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
-!      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), POTPS_TEST, POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
-
-      OPEN(UNIT=23,FILE='VASP_G_POTEFF',STATUS='UNKNOWN',IOSTAT=IERR)
-      IF (IERR/=0) THEN
-         OPEN(UNIT=23,FILE='VASP_G_POTEFF',STATUS='OLD')
-      ENDIF
-      DO j=1, SIZE(PP%PSP,1)
-         WRITE(IU19,'(6f20.8)') PP%PSP(j,1), PP%PSP(j,2), POTPS_G(j)
-      ENDDO
+      STOP
 
 !!!! -------------- UNIT IN VASP     E: Hartree   r: Angstrom ------------------ !!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

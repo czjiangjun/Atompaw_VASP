@@ -427,6 +427,227 @@ END FUNCTION WINDOW
     END SUBROUTINE FOURPOT_TO_Q
     
 
+!*******************************************************************
+!     FOURCHECK
+!     the subroutine performes a FFT of the local pseudopotential
+!     V(q) =
+!        4 \pi /q \int sin(qr) V(r) r dr
+!
+!     Parameter
+!     MD          number of points used for calculating V(q->0)
+!     DELQL       step-size for VLQ
+!     RMAX        behind RMAX V(r) is set to zero
+!
+!*******************************************************************
+
+    SUBROUTINE FOURPOT_TO_Q_CHECK( RDEP_IN, Z, VL, PSP, NQL, DELQL, RGRD, IU6 )
+      USE prec
+!      USE constant
+      USE radial
+      IMPLICIT NONE
+
+      TYPE(rgrid) RGRD
+      REAL(q) RDEP_IN       ! outermost matching point 
+                            ! potential is set to zero outside this point
+      REAL(q) Z             ! valence
+      REAL(q) VL(RGRD%NMAX) ! potential in real space
+      INTEGER NQL           ! number of grid points in local potential
+      REAL(q) PSP(NQL)      ! on entry: old local potential in reciprocal space
+                            ! on exit: new local potential in reciprocal space
+      REAL(q) DELQL         ! step in reciprocal space
+      INTEGER IU6           ! IO unit for output
+!     work arrays
+      INTEGER NMAX          ! number of grid points
+      REAL(q) RMAX          ! outermost point for integration
+      REAL(q) RDEP          ! actual matching point 
+      INTEGER, PARAMETER :: NFFT=32768
+      REAL(q) :: FAKT, R, SUM, RMAXF, D1, D2, DD, QQ, VRMAX, WINDOW
+      REAL(q) :: VR(RGRD%NMAX),WRK(RGRD%NMAX,5)
+      REAL(q) :: VLQ(NQL)
+      REAL(q) :: VQ1(NFFT),VQ2(NFFT),VQ3(NFFT)
+      REAL(q), EXTERNAL :: ERRF
+      INTEGER :: K, I 
+      REAL(q) :: ALP, ALP2
+
+      ALP =1/AUTOA
+      ALP2 = ALP*ALP
+
+! outermost point equal outermost grid point
+      NMAX=RGRD%NMAX
+      RMAX=RGRD%R(NMAX)
+
+!
+! find potential at matching point (RDEP) if supplied
+! 
+      DO K=1, NMAX
+         VL(K) = (VL(K)+FELECT*Z*ERRF(ALP*RGRD%R(K)*1.17)/RGRD%R(K))*2._q*PI*PI*RGRD%R(K)!/DELQL
+      ENDDO
+      VRMAX=0
+      DO K=1,NMAX-1
+         IF (RDEP_IN>0 .AND.  RGRD%R(K)-RDEP_IN > -5E-3) EXIT 
+      END DO
+      RDEP =RGRD%R(K)
+      VRMAX=VL(K)
+
+      DO K=1,NMAX
+         R =RGRD%R(K)
+         WRK(K,1)=R
+! I think the hard window is better defined
+! if the xc functional does not change, the difference
+! between the potentials goes to zero smoothly anyhow
+! so the hard window is fine and exact in that case.
+! 
+!#define hardwindow
+!#ifdef hardwindow
+         IF (RDEP_IN>0 .AND.  R-RDEP_IN > -5E-3) THEN
+            VL(K)=0
+            WRK(K,2)=0
+         ELSE
+            VL(K)=VL(K)-VRMAX
+!            WRK(K,2)=VL(K)*R
+            WRK(K,2)=VL(K)
+         ENDIF
+!#else
+         ! window falls off to 0.5E-2 at RDEP 
+!         WINDOW=(1-ERRF(5*(R-RDEP/1.6)/RDEP))/2
+!         VL(K)=VL(K)*WINDOW
+!         WRK(K,2)=VL(K)*R
+!#endif
+!         WRITE(77,'(3E15.6)') WRK(K,1),WRK(K,2),WINDOW
+      END DO
+      CALL SPLCOF(WRK,SIZE(VL),SIZE(VL),1E30_q)
+
+!----------------------------------------------------------------------
+! limit q-> 0   using simpson integration
+!----------------------------------------------------------------------
+      DO K=1,NMAX
+!         VR(K)=WRK(K,2)*RGRD%R(K)
+         VR(K)=WRK(K,2)*RGRD%R(K)*RGRD%R(K)
+      ENDDO
+
+      CALL SIMPI(RGRD, VR, SUM)
+
+      VLQ(1)= 4._q*PI0*SUM
+!----------------------------------------------------------------------
+! FFT with  NFFT NFFT/2 und NFFT/4 points
+!----------------------------------------------------------------------
+      RMAXF = 2._q*PI0/DELQL
+
+!      CALL WFSINT_WITH_Z(RMAXF, RMAX, NFFT/4, WRK, RGRD%NMAX, VQ1, Z)
+!      CALL WFSINT_WITH_Z(RMAXF, RMAX, NFFT/2, WRK, RGRD%NMAX, VQ2, Z)
+!      CALL WFSINT_WITH_Z(RMAXF, RMAX, NFFT/1, WRK, RGRD%NMAX, VQ3, Z)
+
+      CALL WFSINT(RMAXF, RMAX, NFFT/4, WRK, RGRD%NMAX, VQ1)
+      CALL WFSINT(RMAXF, RMAX, NFFT/2, WRK, RGRD%NMAX, VQ2)
+      CALL WFSINT(RMAXF, RMAX, NFFT/1, WRK, RGRD%NMAX, VQ3)
+
+!-----error estimation
+      D1=0
+      D2=0
+      DO I=1,NQL
+         D1=D1+ABS(VQ3(I)-VQ1(I))
+         D2=D2+ABS(VQ3(I)-VQ2(I))
+      ENDDO
+
+!-----set VLQ (returned array)
+      DO I=2,NQL
+         QQ=DELQL*(I-1)
+         VLQ(I)=VQ3(I)*4._q*PI0/QQ
+      ENDDO
+
+!      DO I=1,NQL
+!         WRITE(77,'(4F14.7)') DELQL*(I-1), VLQ(I), PSP(I), PSP(I)-VLQ(I)
+!      ENDDO
+
+!      PSP=PSP-VLQ
+       DO I=2, NQL
+         QQ=DELQL*(I-1)
+          PSP(I) = VLQ(I)/4._q/PI0+Z*(1-EXP(-QQ*QQ/4._q/ALP2))*FELECT*4._q*PI0/(QQ*QQ)
+       ENDDO
+!----------------------------------------------------------------------
+! write out report
+!----------------------------------------------------------------------
+      IF (IU6>=0) THEN
+         WRITE(IU6,1) RDEP,VRMAX,NFFT,RMAXF,RMAXF/NFFT,DELQL
+
+         FAKT = 4*PI0
+         WRITE(IU6,'(A,E10.3,A)')' difference to FFT with N/2= ',D2/NQL*FAKT
+         WRITE(IU6,'(A,E10.3,A)')' difference to FFT with N/4= ',D1/NQL*FAKT
+         DD = D2/D1
+         WRITE(IU6,'(A,E10.3,A/)')' estimated error in     v(q)= ',D2*DD/(1-DD)/NQL*FAKT,' 1/q'
+
+    1 FORMAT( /' redefinition  of local potential',/ &
+     &       ' ---------------------------------------', &
+     &       ' cutoff radius for potential RDEP =',F9.2/ &
+     &       ' potential at matching point      =',E10.2/ &
+     &       ' number of fourier points    NFFT =',I6/ &
+     &       ' outmost radius for FFT      RMAXF=',F9.2/ &
+     &       ' distance between FFT points      =',F10.3/ &
+     &       ' distance between Q-points   DELQL=',F11.4)
+
+      ENDIF
+    END SUBROUTINE FOURPOT_TO_Q_CHECK
+
+
+
+!*********************************************************************
+!
+!  WFSINT
+!  performes a sin transformation given an work array containing
+!  a spline fit
+!
+!********************************************************************
+
+    SUBROUTINE WFSINT_WITH_Z(RMAXF,RMAX,NFFT,WRK, NMAX, VQ, Z)
+!      USE constant
+      USE PREC
+      IMPLICIT NONE
+
+      REAL(q) :: RMAXF        ! outmost radius for FFT
+      REAL(q) :: RMAX         ! outmost radius for data points; for r>RMAX   data are assumed to be 0)
+      INTEGER :: NFFT         ! number of FFT-points 
+      INTEGER :: NMAX         ! number of grid points in spline
+      REAL(q) ::  WRK(NMAX,5) ! spline fit
+      REAL(q) ::  VQ(NFFT)    ! fourier transformed
+      REAL(q) Z             ! valence
+      REAL(q), EXTERNAL :: ERRF
+! local
+      REAL(q) :: ALP
+      REAL(q) :: RDEL, R, DUMMY
+      INTEGER :: I, K
+
+      ALP =1/AUTOA
+      RDEL = RMAXF/NFFT
+
+      DO I=1,NFFT
+         VQ(I)=0
+      ENDDO
+
+      R=0
+      DO I=1,NFFT
+         IF (R>RMAX) THEN
+            VQ(I)=0
+         ELSE
+            CALL SPLVAL(R, VQ(I), DUMMY, WRK, NMAX, NMAX)
+         ENDIF
+         R=R+RDEL
+         VQ(I) = (VQ(I)+FELECT*Z*ERRF(ALP*R)/R)*PI*R/RMAXF
+!         WRITE(6,*) 'VQ=', VQ
+      ENDDO
+
+! f(r) = int sin_0^Infty  f(q) sin qr dq = del r sum_0^NFFT  f(q) sin qr
+      CALL REALFT(VQ,NFFT/2,1)
+
+      DO K=1,NFFT/2
+         VQ(K)=VQ(K*2)*RDEL
+      ENDDO
+
+    END SUBROUTINE WFSINT_WITH_Z
+
+
+
+
+
 !*********************************************************************
 !
 !  WFSINT
