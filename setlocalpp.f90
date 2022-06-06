@@ -472,23 +472,25 @@ END FUNCTION WINDOW
       ALP =1/AUTOA
       ALP2 = ALP*ALP
 
+
 ! outermost point equal outermost grid point
       NMAX=RGRD%NMAX
       RMAX=RGRD%R(NMAX)
 
-!
+      DO K=1, NMAX
+!         VL(K) = (VL(K)+FELECT*Z*ERRF(ALP*RGRD%R(K)*1.16)/RGRD%R(K))*2._q*PI*PI*RGRD%R(K)
+         VL(K) = (VL(K)+FELECT*Z*ERRF(ALP*RGRD%R(K))/RGRD%R(K))*PI*PI
+      ENDDO
+
 ! find potential at matching point (RDEP) if supplied
 ! 
-      DO K=1, NMAX
-         VL(K) = (VL(K)+FELECT*Z*ERRF(ALP*RGRD%R(K)*1.17)/RGRD%R(K))*2._q*PI*PI*RGRD%R(K)!/DELQL
-      ENDDO
       VRMAX=0
       DO K=1,NMAX-1
          IF (RDEP_IN>0 .AND.  RGRD%R(K)-RDEP_IN > -5E-3) EXIT 
       END DO
       RDEP =RGRD%R(K)
       VRMAX=VL(K)
-
+!
       DO K=1,NMAX
          R =RGRD%R(K)
          WRK(K,1)=R
@@ -504,8 +506,7 @@ END FUNCTION WINDOW
             WRK(K,2)=0
          ELSE
             VL(K)=VL(K)-VRMAX
-!            WRK(K,2)=VL(K)*R
-            WRK(K,2)=VL(K)
+            WRK(K,2)=VL(K)*R
          ENDIF
 !#else
          ! window falls off to 0.5E-2 at RDEP 
@@ -521,13 +522,13 @@ END FUNCTION WINDOW
 ! limit q-> 0   using simpson integration
 !----------------------------------------------------------------------
       DO K=1,NMAX
-!         VR(K)=WRK(K,2)*RGRD%R(K)
-         VR(K)=WRK(K,2)*RGRD%R(K)*RGRD%R(K)
+         VR(K)=WRK(K,2)*RGRD%R(K)
       ENDDO
 
       CALL SIMPI(RGRD, VR, SUM)
 
       VLQ(1)= 4._q*PI0*SUM
+!      WRITE(6,*) 'VLQ_1= ', VLQ(1)/4.0/PI0/4.0/PI0 
 !----------------------------------------------------------------------
 ! FFT with  NFFT NFFT/2 und NFFT/4 points
 !----------------------------------------------------------------------
@@ -563,7 +564,10 @@ END FUNCTION WINDOW
        DO I=2, NQL
          QQ=DELQL*(I-1)
           PSP(I) = VLQ(I)/4._q/PI0+Z*(1-EXP(-QQ*QQ/4._q/ALP2))*FELECT*4._q*PI0/(QQ*QQ)
+!          PSP(I) = VLQ(I) !/4._q/PI0
        ENDDO
+       PSP(1) = 2._q*PSP(2) - PSP(3)
+
 !----------------------------------------------------------------------
 ! write out report
 !----------------------------------------------------------------------

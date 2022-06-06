@@ -21,7 +21,7 @@
          USE atompaw_report
 !
      CONTAINS
-      SUBROUTINE vasp_pseudo(ifinput, ifen, Grid, Orbit, Pot_AE, Pot_FC, success)!(ifinput,ifen,Grid)
+      SUBROUTINE vasp_pseudo(ifinput, ifen, Grid, Orbit, Pot_AE, Pot_FC, IMESH, success)!(ifinput,ifen,Grid)
          IMPLICIT COMPLEX(q)   (C)
          IMPLICIT REAL(q)  (A-B,D-H,O-Z)
 
@@ -34,7 +34,8 @@
          REAL(q), ALLOCATABLE :: PotHr(:), PotXCr(:), PotAEr(:), PotAECr(:), PotATr(:)
          REAL(q), ALLOCATABLE :: Pot_eff(:), Pot_teff(:)
          REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
-         REAL(q), ALLOCATABLE :: POTAE_EFF(:), DPOTAE_EFF(:), POTPS_EFF(:), POTPS_G(:)
+         REAL(q), ALLOCATABLE :: POTAE_EFF(:), DPOTAE_EFF(:), POTPS_EFF(:)
+         REAL(q), ALLOCATABLE :: POTPS_G(:), CORPS_G(:), RHOPS_G(:)
          REAL(q), ALLOCATABLE :: pdensity(:), den(:) ,cpdensity(:)
          INTEGER :: nbase, N, irc, irc_core, irc_shap
          REAL(q) :: Q_v, Q_00 , Q_00c, tq, alpha, beta, random_x
@@ -58,6 +59,7 @@
          CHARACTER(LEN=2) :: TYPE(1)
          LOGICAL ::   LPAW,  success, UNSCREN, LXCADD
 !         INTEGER, EXTERNAL :: MAXL1
+         INTEGER, OPTIONAL :: IMESH
          REAL(q), EXTERNAL :: ERRF
 
          ALLOCATE (P(1))
@@ -79,6 +81,8 @@
         IU15 = 19
         IU17 = 21
         IU19 = 23
+        IU21 = 25
+        IU23 = 27
 
          IU8 = 12
         IU10 = 14
@@ -149,7 +153,7 @@
       ALLOCATE(POTAE_EFF(PP%R%NMAX),DPOTAE_EFF(PP%R%NMAX), POTPS_EFF(PP%R%NMAX) )
       ALLOCATE(POT_TEST(PP%R%NMAX),POTAE_TEST(PP%R%NMAX), POTPSC_TEST(PP%R%NMAX) )
       ALLOCATE(POTPSC_CHECK(PP%R%NMAX))
-      ALLOCATE(POTPS_G(NPSPTS))
+      ALLOCATE(POTPS_G(NPSPTS), CORPS_G(NPSPTS), RHOPS_G(NPSPTS))
       ALLOCATE(POTPS_TEST(PP%R%NMAX))
 !      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
       ALLOCATE(CRHODE(LDIM,LDIM))
@@ -200,6 +204,7 @@
       DO j=1, PP%R%NMAX
 !         WRITE(6,*) 'TEST =', Z/PP%R%R(j)*FELECT
          POTAEC(j) =   POTAEC(j)/SCALE - Z/PP%R%R(j)*FELECT  !!!   V_H[n_Zc] =  V_H[n_c] - Z/r 
+!         POTAEC(j) =   POTAEC(j)/SCALE - (Z-PP%ZVALF_ORIG)/PP%R%R(j)*FELECT  !!!   V_H[n_Zc] =  V_H[n_c] - Z/r 
       ENDDO
 !      DO j =1, PP%R%NMAX
 !         WRITE(6,*) POTAEC(j)
@@ -311,19 +316,20 @@
       ENDDO
       CALL GRAD(PP%R, POTAEC, DPOTAE_EFF)
 
+      IMESH = 40
 !      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
-      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX-38)/POTAEC(PP%R%NMAX-38)
+      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX-IMESH)/POTAEC(PP%R%NMAX-IMESH)
 !      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
       beta = 1.0
 
       CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
 !      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
 !      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
-      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX-38)
+      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX-IMESH)
 !      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
-      alpha = POTAEC(PP%R%NMAX-38)*PP%R%R(PP%R%NMAX-38)/sin(QR)
+      alpha = POTAEC(PP%R%NMAX-IMESH)*PP%R%R(PP%R%NMAX-IMESH)/sin(QR)
 !      WRITE(6,*) 'alpha=' , alpha
-      DO j = 1, PP%R%NMAX-38
+      DO j = 1, PP%R%NMAX-IMESH
          QR = Qloc*PP%R%R(j)
          POTPSC_TEST(j) = alpha*sin(QR)/PP%R%R(j)
 !         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
@@ -351,20 +357,22 @@
 
 !      POTPSC_CHECK(:) = PP%POTPSC(:)
       POTPSC_CHECK(:) = POTPSC_TEST(:)
-      CALL FOURPOT_TO_Q_CHECK( PP%R%R(PP%R%NMAX)+1.0, PP%ZVALF_ORIG, POTPSC_CHECK,   &
+      CALL FOURPOT_TO_Q_CHECK( PP%R%R(PP%R%NMAX), PP%ZVALF_ORIG, POTPSC_CHECK,   &
      &             POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
 !      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), POTPS_TEST, POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
 
-      OPEN(UNIT=23,FILE='VASP_G_POTEFF',STATUS='UNKNOWN',IOSTAT=IERR)
+      OPEN(UNIT=23,FILE='VASP_G_POTLOC',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
-         OPEN(UNIT=23,FILE='VASP_G_POTEFF',STATUS='OLD')
+         OPEN(UNIT=23,FILE='VASP_G_POTLOC',STATUS='OLD')
       ENDIF
       DO j=1, SIZE(PP%PSP,1)
-         WRITE(IU19,'(6f20.8)') PP%PSP(j,1), PP%PSP(j,2), POTPS_G(j)
+         WRITE(IU19,'(6f20.8)') PP%PSP(j,1), PP%PSP(j,2), POTPS_G(j), PP%PSPCOR(j),  &
+     &                          PP%PSPRHO(j), PP%PSPTAU(j)
       ENDDO
 
 !   ---------------- !!!!!! FOR CHECK !!!!! -------------------
       
+      POTPSC_CHECK(:) = 0.0
 !       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
 !     &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
        CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, POTPS_G, PP%PSGMAX/NPSPTS, &
@@ -375,6 +383,31 @@
      &                         PP%POTPSC(j) + PP%POTPS(j), POTPSC_CHECK(j)
       ENDDO
 
+!   ---------------- !!!!!! CORE-CHG IN RECIPROCAL SPACE FROM RHOPS !!!!!  ----------------------    !     
+      CORPS_G(:) = 0.0
+      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), PP%RHOPS,   &
+     &             CORPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
+
+      OPEN(UNIT=25,FILE='VASP_G_PCORE',STATUS='UNKNOWN',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=25,FILE='VASP_G_PCORE',STATUS='OLD')
+      ENDIF
+      DO j=1, SIZE(PP%PSP,1)
+         WRITE(IU21,'(6f20.8)') PP%PSP(j,1), PP%PSPCOR(j), -CORPS_G(j)
+      ENDDO
+
+!   ---------------- !!!!!! PSEUDO-CHG IN RECIPROCAL SPACE FROM  !!!!!  ----------------------    !     
+      RHOPS_G(:) = 0.0
+      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), RHOPS00+PP%RHOPS,   &
+     &             RHOPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
+
+      OPEN(UNIT=27,FILE='VASP_G_PSRHO',STATUS='UNKNOWN',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=27,FILE='VASP_G_PSRHO',STATUS='OLD')
+      ENDIF
+      DO j=1, SIZE(PP%PSP,1)
+         WRITE(IU23,'(6f20.8)') PP%PSP(j,1), PP%PSPRHO(j), -RHOPS_G(j)/4.0/SQRT(PI0)
+      ENDDO
 
       WRITE(6,*) 'VALUE=', PP%ZVALF_ORIG
       WRITE(6,*) 'NPSPTS=', NPSPTS
