@@ -396,14 +396,14 @@
          WRITE(IU21,'(6f20.8)') PP%PSP(j,1), PP%PSPCOR(j), -CORPS_G(j)
       ENDDO
 
-!   ---------------- !!!!!! PSEUDO-CHG IN RECIPROCAL SPACE FROM  !!!!!  ----------------------    !     
+!   ---------------- !!!!!! PSEUDO-CHG IN RECIPROCAL SPACE FROM  PSPRHO !!!!!  ----------------------    !     
       RHOPS_G(:) = 0.0
       CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), RHOPS00+PP%RHOPS,   &
      &             RHOPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
 
-      OPEN(UNIT=27,FILE='VASP_G_PSRHO',STATUS='UNKNOWN',IOSTAT=IERR)
+      OPEN(UNIT=27,FILE='VASP_G_PSPRHO',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
-         OPEN(UNIT=27,FILE='VASP_G_PSRHO',STATUS='OLD')
+         OPEN(UNIT=27,FILE='VASP_G_PSPRHO',STATUS='OLD')
       ENDIF
       DO j=1, SIZE(PP%PSP,1)
          WRITE(IU23,'(6f20.8)') PP%PSP(j,1), PP%PSPRHO(j), -RHOPS_G(j)/4.0/SQRT(PI0)
@@ -414,6 +414,7 @@
       WRITE(6,*) 'PSGMAX=', PP%PSGMAX
       WRITE(6,*) 'NMAX=', PP%R%NMAX
 
+!   ---------------- !!!!!! PROJECTOR IN REAL SPACE FROM  PROJECTOR !!!!!  ----------------------    !     
 !             WRITE(IU19,*)
 !             WRITE(IU19,*) PP%PSDMAX
 !             WRITE(IU19,*)
