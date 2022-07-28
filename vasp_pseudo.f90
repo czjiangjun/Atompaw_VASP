@@ -21,7 +21,8 @@
          USE atompaw_report
 !
      CONTAINS
-      SUBROUTINE vasp_pseudo(ifinput, ifen, Grid, Orbit, Pot_AE, Pot_FC, IMESH, success)!(ifinput,ifen,Grid)
+!      SUBROUTINE vasp_pseudo(ifinput, ifen, Grid, Orbit, Pot_AE, Pot_FC, IMESH)  !(ifinput,ifen,Grid)
+      SUBROUTINE vasp_pseudo(ifinput, ifen, Grid, Orbit, Pot_AE, Pot_FC)  !(ifinput,ifen,Grid)
          IMPLICIT COMPLEX(q)   (C)
          IMPLICIT REAL(q)  (A-B,D-H,O-Z)
 
@@ -37,6 +38,8 @@
          REAL(q), ALLOCATABLE :: POTAE_EFF(:), DPOTAE_EFF(:), POTPS_EFF(:)
          REAL(q), ALLOCATABLE :: POTPS_G(:), CORPS_G(:), RHOPS_G(:)
          REAL(q), ALLOCATABLE :: pdensity(:), den(:) ,cpdensity(:)
+         REAL(q), ALLOCATABLE :: TMP(:),DTMP(:),VTMP(:,:,:), DIJ(:,:), DION(:,:)
+         REAL(q), ALLOCATABLE :: PARWKINAE(:,:), PARWKINPS(:,:)
          INTEGER :: nbase, N, irc, irc_core, irc_shap
          REAL(q) :: Q_v, Q_00 , Q_00c, tq, alpha, beta, random_x
          TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
@@ -48,6 +51,7 @@
          INTEGER :: ifinput,ifen,Z
          INTEGER :: NTYP, NTYPD, LDIM, LDIM2, LMDIM,CHANNELS, LMAX, LMMAX, LI, MI, LMI
          INTEGER :: LMAX_TABLE, LYMAX 
+         INTEGER :: CH1, CH2, LL, LLP, LMIN, LMAIN
          REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
          REAL(q) ROOT(2), QR, Qloc, R_CUT
          REAL(q) :: DHARTREE, QCORE,SCALE, DOUBLEAE, EXCG
@@ -55,11 +59,15 @@
          REAL(q), ALLOCATABLE :: POTAEC(:), POTPSC_TEST(:), POT_TEST(:), POTAE_TEST(:), POTPS_TEST(:)
          REAL(q), ALLOCATABLE :: POTPSC_CHECK(:)
          REAL(q), ALLOCATABLE :: CRHODE(:,:)
-         REAL(q), ALLOCATABLE :: RHOLM(:), DLM(:)!, GAUSSIAN(:)
+         REAL(q), ALLOCATABLE :: RHOLM(:), DLM(:), DLLMM(:,:,:)!, GAUSSIAN(:)
+         REAL(q), ALLOCATABLE :: DHXC(:,:), QPAW(:,:,:)
          CHARACTER(LEN=2) :: TYPE(1)
-         LOGICAL ::   LPAW,  success, UNSCREN, LXCADD
+         LOGICAL ::   LPAW, UNSCREN, LXCADD
 !         INTEGER, EXTERNAL :: MAXL1
-         INTEGER, OPTIONAL :: IMESH
+!         LOGICAL, OPTIONAL :: success
+         LOGICAL :: success
+!         INTEGER, OPTIONAL :: IMESH
+         INTEGER :: IMESH
          REAL(q), EXTERNAL :: ERRF
 
          ALLOCATE (P(1))
@@ -159,7 +167,7 @@
       ALLOCATE(CRHODE(LDIM,LDIM))
 !      ALLOCATE(CRHODE(LDIM,LDIM), POT-AE(PP%R%NMAX))
       ALLOCATE(RHOLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
-      ALLOCATE(DLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
+!      ALLOCATE(DLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
 !
 
 !
@@ -414,11 +422,118 @@
       WRITE(6,*) 'PSGMAX=', PP%PSGMAX
       WRITE(6,*) 'NMAX=', PP%R%NMAX
 
+!   ---------------- !!!!!! DION !!!!!  ----------------------    !     
+ 
+      ALLOCATE(TMP(PP%R%NMAX),DTMP(PP%R%NMAX))
+      ALLOCATE(PARWKINAE(PP%R%NMAX, PP%LMAX), PARWKINPS(PP%R%NMAX, PP%LMAX))
+      ALLOCATE(QPAW(PP%LMAX, PP%LMAX, 0:2*PP%LMAX))
+      ALLOCATE(DIJ(PP%LMAX, PP%LMAX), DION(PP%LMAX, PP%LMAX))
+
+!!    T|\psi_i\rangle = (-\nabla^2-\dfrac{l(l+1)}2) \psi_i     
+      DO I=1,PP%LMAX
+         CALL GRAD(PP%R,PP%WAE(:,I),TMP)
+         CALL GRAD(PP%R,TMP,DTMP)
+         DO J =1, PP%R%NMAX
+            PARWKINAE(J,I) = -(DTMP(J)-PP%LPS(I)*(PP%LPS(I)+1)/PP%R%R(J)/PP%R%R(J)*PP%WAE(J,I))*HSQDTM
+         ENDDO
+!         WRITE(6,'(5F20.10)') (PP%R%R(J),PP%WAE(J,I),PP%WPS(J,I), & !PP%PARWKINAE(J,I),PP%PARWKINPS(J,I), &
+!        &   -(DTMP(J)-PP%LPS(I)*(PP%LPS(I)+1)/PP%R%R(J)/PP%R%R(J)*PP%WAE(J,I))*HSQDTM, &
+!        &   TMP(J),J=1,PP%R%NMAX)
+      ENDDO
+      
+      DO I=1,PP%LMAX
+         CALL GRAD(PP%R,PP%WPS(:,I),TMP)
+         CALL GRAD(PP%R,TMP,DTMP)
+         DO J =1, PP%R%NMAX
+            PARWKINPS(J,I) = -(DTMP(J)-PP%LPS(I)*(PP%LPS(I)+1)/PP%R%R(J)/PP%R%R(J)*PP%WPS(J,I))*HSQDTM
+         ENDDO
+!         WRITE(6,'(5F20.10)') (PP%R%R(J),PP%WAE(J,I),PP%WPS(J,I), & !PP%PARWKINAE(J,I),PP%PARWKINPS(J,I), &
+!        &   -(DTMP(J)-PP%LPS(I)*(PP%LPS(I)+1)/PP%R%R(J)/PP%R%R(J)*PP%WPS(J,I))*HSQDTM, &
+!        &   TMP(J),J=1,PP%R%NMAX)
+      ENDDO
+
+!!  Dion_{ij}=\langle\phi_i|T+V_eff|\phi_j\rangle-\langle\tilde\phi_i|T+\tilde{V}_eff|\tilde\phi_j\rangle
+!!      -\int\hat{Q}^{00}_{ij}(r)\tilde{V}(r)\mathrm{d}r
+
+      !! DIJ=\langle\phi_i|T+V_eff|\phi_j\rangle-\langle\tilde\phi_i|T+\tilde{V}_eff|\tilde\phi_j\rangle
+      DIJ = 0.d0
+      DO CH1=1, PP%LMAX
+      DO CH2=1, PP%LMAX
+         TMP = 0.d0
+         IF(PP%LPS(CH1) == PP%LPS(CH2)) THEN
+                 DO I=1, PP%R%NMAX
+                    TMP(I)=PP%WAE(I,CH1)*PARWKINAE(I,CH2)-PP%WAE(I,CH1)*PARWKINPS(I,CH2) &
+     &                    +PP%WAE(I,CH1)*POTAE_EFF(I)*PP%WAE(I,CH2)-PP%WPS(I,CH1)*POTPS_EFF(I)*PP%WPS(I,CH2)
+                 ENDDO
+                 CALL SIMPI(PP%R, TMP, DIJ(CH1, CH2))
+         ENDIF
+      ENDDO
+      ENDDO
+
+!!   QPAW =\int(\phi_i\phi_i-\tilde\phi_i\tilde\phi_j)r^L\mathrm{d}r 
+      DO CH1=1, PP%LMAX
+      DO CH2=1, PP%LMAX
+         LL=PP%LPS(CH1)
+         LLP=PP%LPS(CH2)
+         LMIN=ABS(LL-LLP) ; LMAX=ABS(LL+LLP)
+         DO LMAIN=LMIN, LMAX, 2
+            TMP(:)=(PP%WAE(:,CH1)*PP%WAE(:,CH2)-      &
+     &         PP%WPS(:,CH1)*PP%WPS(:,CH2))*PP%R%R(:)**LMAIN
+            CALL SIMPI(PP%R, TMP, SUM)
+            QPAW(CH1,CH2, LMAIN)=SUM
+            WRITE(6,*) 'QPAW:', PP%QPAW(CH1,CH2, LMAIN), SUM
+         ENDDO
+      ENDDO
+      ENDDO
+
+!!!! " unscreen "
+!!      -\int\hat{Q}^{00}_{ij}(r)\tilde{V}(r)\mathrm{d}r
+
+      LYMAX=MAXVAL(PP%LPS(1:PP%LMAX))
+      IF (ASSOCIATED(PP%QPAW)) LYMAX=LYMAX*2
+      LMMAX=(LYMAX+1)**2
+      ALLOCATE(VTMP(PP%R%NMAX,LMMAX,1))
+      ALLOCATE(DLM(PP%LMDIM*PP%LMDIM), DLLMM(PP%LMDIM,PP%LMDIM,1), DHXC(PP%LMDIM,PP%LMDIM))
+!      SCALE=1/(2*SQRT(PI))      
+      VTMP=0; VTMP(:,1,1)=POTPS_EFF(:)*SCALE
+!      ! Reconstruct the PAW strength parameters for the reference system
+      CALL RAD_POT_WEIGHT(PP%R,1,LYMAX,VTMP)
+      DLM=0; DLLMM=0; DHXC=0
+      CALL RAD_AUG_PROJ(VTMP(:,:,1),PP%R,DLM,PP%LMAX,PP%LPS,LYMAX,PP%AUG,QPAW)
+      CALL TRANS_DLM(DLLMM(:,:,1),DLM,PP)
+
+      DHXC=-DLLMM(:,:,1)
+!      ! Compute D_{ij} and Q_{ij}
+      LM=1
+      DO CH1=1,PP%LMAX
+      LMP=1
+      DO CH2=1,PP%LMAX
+         DIJ(CH1,CH2)=DIJ(CH1,CH2)+DHXC(LM,LMP)
+!         QIJ(I,J)=PP%QION(I,J)
+         LMP=LMP+2*PP%LPS(CH2)+1
+      ENDDO
+      LM=LM+2*PP%LPS(CH1)+1
+      ENDDO      
+
+!! Make DION hermitian
+      DO CH1=1,PP%LMAX
+      DO CH2=1,PP%LMAX
+         DION(CH1,CH2)=(DIJ(CH1,CH2)+DIJ(CH2,CH1))/2.0/5.0/(floor((CH1-1)/2.0)+1)
+         DION(CH2,CH1)=DION(CH1,CH2)
+         WRITE(6,*) 'DION:', DION(CH1,CH2), PP%DION(CH1,CH2)!, DION(CH1,CH2)/PP%DION(CH1,CH2)
+      ENDDO      
+      ENDDO      
+
+
+      DEALLOCATE(VTMP, DLLMM, DHXC)
+      DEALLOCATE(TMP, DTMP, PARWKINAE, PARWKINPS, QPAW)
+      DEALLOCATE(DIJ, DION)
+
 !   ---------------- !!!!!! PROJECTOR IN REAL SPACE FROM  PROJECTOR !!!!!  ----------------------    !     
+
 !             WRITE(IU19,*)
 !             WRITE(IU19,*) PP%PSDMAX
 !             WRITE(IU19,*)
-      STOP
 
 !!!! -------------- UNIT IN VASP     E: Hartree   r: Angstrom ------------------ !!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

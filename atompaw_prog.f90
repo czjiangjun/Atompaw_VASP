@@ -96,7 +96,7 @@ PROGRAM atompaw
   If (TRIM(FCorbit%exctype)=='HF'.or.TRIM(FCorbit%exctype)=='EXXKLI') PAW%tcore=0
   If (TRIM(FCorbit%exctype)=='EXXKLI') Call fixtcorewfn(Grid,PAW)
 
-  CALL vasp_pseudo(ifinput, ifen, Grid, FCOrbit, AEPot, FCPot, OK)
+  CALL vasp_pseudo(ifinput, ifen, Grid, FCOrbit, AEPot, FCPot)
 
 !  Call SetPAWOptions2(ifinput,ifen,Grid,FCOrbit,FCPot,OK)
 
