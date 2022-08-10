@@ -45,7 +45,7 @@ n
 y
 0.42    # 能量往大调压制波函数
 n
-vasprrkj  gramschmidtortho  Besselshape
+Vanderbilt vasprrkj  gramschmidtortho  Besselshape
 1 3   MTROULLIER
 1.5
 1.5

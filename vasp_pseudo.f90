@@ -91,6 +91,8 @@
         IU19 = 23
         IU21 = 25
         IU23 = 27
+        IU25 = 29
+        IU27 = 31
 
          IU8 = 12
         IU10 = 14
@@ -100,6 +102,7 @@
         IU16 = 20
         IU18 = 22
         IU20 = 24
+        IU22 = 26
 
          Call RD_PSEUDO(INFO, P, NTYP, NTYPD, LDIM, LDIM2, LMDIM, POMASS,     &
      &                  RWIGS, TYPE,                       &
@@ -530,6 +533,13 @@
       DEALLOCATE(DIJ, DION)
 
 !   ---------------- !!!!!! PROJECTOR IN REAL SPACE FROM  PROJECTOR !!!!!  ----------------------    !     
+      OPEN(UNIT=29,FILE='VASP_PSPNL',STATUS='UNKNOWN',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=29,FILE='VASP_PSPNL',STATUS='OLD')
+      ENDIF
+!      DO j=1, NPSRNL
+!         WRITE(IU25,'(6f20.8)') PP%PSPRNL
+!      ENDDO
 
 !             WRITE(IU19,*)
 !             WRITE(IU19,*) PP%PSDMAX
@@ -785,6 +795,16 @@
 
 !   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POT_V[n_Zc] !!!!!  ----------------------    !     
 !        CALL FOURPOT_TO_Q()
+
+!   ---------------- !!!!!! PROJECTOR IN RECIPROCAL SPACE ] !!!!!  ----------------------    !     
+!        
+         OPEN(UNIT=26,FILE='ATOM_PROJECT',STATUS='UNKNOWN',IOSTAT=IERR)
+         DO i=1, PAW%nbase
+           DO j=1, Grid%n
+            WRITE(IU22,'(6f20.8)') Grid%r(j)*AUTOA, PAW%otp(j,i)!*SQRT(RYTOEV)
+           ENDDO
+         ENDDO
+
 
          WRITE(6, *) 'WRITE_POTCAR'
          CALL WRITE_POTCAR(INFO, PP, Grid, FC%coreden, PAW, PotAEr)
@@ -1271,6 +1291,7 @@
       CHARACTER*80 :: CSEL
       CHARACTER(LEN=4) :: PARAM_CHARACTER
       REAL(q)  ::   POTCAR_PARAM, COREDEN(Grid%n), POTAE(Grid%n)
+      REAL(q)  ::   POTCAR_G_PARAM, POTCAR_R_PARAM
 !      REAL(q)  ::   WAE(Grid%n,PAW%nbase), WPS(Grid%n,PAW%nbase)
       REAL(q)  ::   WAE(Grid%n), WPS(Grid%n)
       INTEGER  ::   XC_TYPE, L1, L2, NMAX, NRANGE
@@ -1289,8 +1310,10 @@
       ENDIF
 
       OPEN(UNIT=88,FILE='POTCAR_NEW',STATUS='UNKNOWN',IOSTAT=IERR)
+      OPEN(UNIT=89,FILE='POTCAR.lib',STATUS='UNKNOWN',FORM='UNFORMATTED', IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=88,FILE='POTCAR_NEW',STATUS='UNKNOWN')
+         OPEN(UNIT=89,FILE='POTCAR.lib',STATUS='UNKNOWN')
       ENDIF
 
       LPAW = .FALSE.
@@ -1305,29 +1328,37 @@
       DO I=1,59
         READ(10,'(A80)') CSEL
         WRITE(88,'(A80)') CSEL
+        WRITE(89) CSEL
       ENDDO
       
 !!!!!   LOCAL PART POTENTIAL   !!!!!
       READ(10,*) POTCAR_PARAM
       READ(10,*) (POTCAR_DATA(I),I=1,NPSPTS)
       WRITE(88,'(F19.13)') POTCAR_PARAM
+      WRITE(89) POTCAR_PARAM
       WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
+      WRITE(89) (POTCAR_DATA (I),I=1,NPSPTS)
 
       READ(10,'(1X,A1)') CSEL
       IF (CSEL=='g') THEN
 !!!!!          XC_TYPE         !!!!!
          WRITE(88,*) ' gradient corrections used for XC '
+         WRITE(89) ' gradient corrections used for XC '
          READ(10,*) XC_TYPE
          WRITE(88,'(I12)') XC_TYPE
+         WRITE(89) XC_TYPE
 
         READ(10,'(A80)') CSEL
         WRITE(88,'(A80)') CSEL
+        WRITE(89) CSEL
       ENDIF
 !!!!!      PSPCOR             !!!!!
       IF (CSEL=='c') THEN
          WRITE(88,*) ' core charge-density (partial) '
+         WRITE(89) ' core charge-density (partial) '
          READ(10,*) (POTCAR_DATA (I),I=1,NPSPTS)
          WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
+         WRITE(89) (POTCAR_DATA (I),I=1,NPSPTS)
       ELSE
 !         NULLIFY(P(NTYP)%PSPCOR)
       ENDIF
@@ -1335,69 +1366,117 @@
 !!!!!  KINETIC ENERGY PARTIAL     !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
+      WRITE(89) CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,NPSPTS)
       WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
+      WRITE(89) (POTCAR_DATA (I),I=1,NPSPTS)
 
 !!!!!   ATOMIC PSEUDO CHARGE-DENSITY     !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
+      WRITE(89) CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,NPSPTS)
       WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSPTS)
+      WRITE(89) (POTCAR_DATA (I),I=1,NPSPTS)
 
 !!!!!   NON LOCAL PART PROJECTOR   !!!!!
 !      WRITE(6,*) 'nbase=',PAW%nbase, PAW%l(PAW%nbase)
-      READ(10,*) POTCAR_PARAM, PARAM_CHARACTER
-      WRITE(88,500) POTCAR_PARAM, PARAM_CHARACTER
+      READ(10,*) POTCAR_G_PARAM, PARAM_CHARACTER
+      WRITE(88,500) POTCAR_G_PARAM, PARAM_CHARACTER
+      WRITE(89) POTCAR_G_PARAM, PARAM_CHARACTER
+
+      OPEN(UNIT=29,FILE='VASP_PSNL',STATUS='UNKNOWN',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=29,FILE='VASP_PSNL',STATUS='UNKNOWN')
+      ENDIF
+
+      OPEN(UNIT=31,FILE='VASP_PSRNL',STATUS='UNKNOWN',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=31,FILE='VASP_PSRNL',STATUS='UNKNOWN')
+      ENDIF
+
+
       DO L = 0,  PAW%l(PAW%nbase)
         READ(10,'(A80)') CSEL
         WRITE(88,'(A80)') CSEL
-        READ(10,*) L1, NL1, POTCAR_PARAM
-        WRITE(88,'(2I12, F19.14)') L1, NL1, POTCAR_PARAM
+        WRITE(89) CSEL
+        READ(10,*) L1, NL1, POTCAR_R_PARAM
+        WRITE(88,'(2I12, F19.14)') L1, NL1, POTCAR_R_PARAM
+        WRITE(89) L1, NL1, POTCAR_R_PARAM
         READ(10,*) (POTCAR_DATA (I),I=1,4)
         WRITE(88,'(F19.14, 2F24.13)') (POTCAR_DATA (I),I=1,4)
+        WRITE(89) (POTCAR_DATA (I),I=1,4)
 
         DO LI = 1, NL1
         !!!!!   RECIPROCAL SPACE PART   !!!!!
            READ(10,'(A80)') CSEL
            WRITE(88,'(A80)') CSEL
-           WRITE(6,*) 'NPSNL=', NPSNL
+           WRITE(89) CSEL
+!           WRITE(6,*) 'NPSNL=', NPSNL
            READ(10,*) (POTCAR_DATA (I),I=1,NPSNL)
            WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSNL)
+           WRITE(89) (POTCAR_DATA (I),I=1,NPSNL)
+
+           DO I=0, NPSNL
+              WRITE(29,*) POTCAR_G_PARAM/NPSNL*(I-1), POTCAR_DATA(I)
+           ENDDO
+
+
        !!!!!   REAL SPACE PART   !!!!!
            READ(10,'(A80)') CSEL
            WRITE(88,'(A80)') CSEL
+           WRITE(89) CSEL
            READ(10,*) (POTCAR_DATA (I),I=1,NPSNL)
            WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSNL)
+           WRITE(89) (POTCAR_DATA (I),I=1,NPSNL)
+
+
+           DO I=1, NPSNL
+              WRITE(31,*) POTCAR_R_PARAM/NPSNL*(I-1), POTCAR_DATA(I)
+           ENDDO
+
+
         ENDDO
+        WRITE(29,*)
+        WRITE(31,*)
       ENDDO
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!        PAW PART        !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
+      WRITE(89) CSEL
       READ(10,*) NMAX, POTCAR_PARAM
       WRITE(88,600) FROM_PP%R%NMAX, POTCAR_PARAM
+      WRITE(89) FROM_PP%R%NMAX, POTCAR_PARAM
       READ(10,*) 
       WRITE(88,*)'(5E20.12)' 
+      WRITE(89)'(5E20.12)' 
 
       NRANGE = (PAW%l(PAW%nbase)+1)**4
       DO I =1, 2
 !!!!!   augmentation charge (non spherical)   !!!!!
          READ(10,'(A80)') CSEL
          WRITE(88,'(A80)') CSEL
+         WRITE(89) CSEL
          READ(10,*) (POTCAR_DATA (J),J=1,NRANGE)
          WRITE(88,'(5E20.12)') (POTCAR_DATA (J),J=1,NRANGE)
+         WRITE(89) (POTCAR_DATA (J),J=1,NRANGE)
       ENDDO
 !!!!!            grid              !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
+      WRITE(89) CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
       WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(89) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
 
 !!!!!            aepotential              !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
+      WRITE(89) CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(89) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
       DO I = 1, Grid%n
          POTAE(I) = -POTAE(I)/Grid%r(I)*RYTOEV
@@ -1416,7 +1495,9 @@
 !!!!!        core charge-density          !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
+      WRITE(89) CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(89) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
       DO I = 1, Grid%n
 !         COREDEN(I) = COREDEN(I)/(SCALE*AUTOA)/(SCALE*AUTOA) 
@@ -1435,27 +1516,37 @@
 !!!!!       kinetic energy-density        !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
+      WRITE(89) CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
       WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(89) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
 !!!!!    mkentic energy-density pseudized    !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
+      WRITE(89) CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
       WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(89) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
 !!!!!      local pseudo-potential core      !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
+      WRITE(89) CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
       WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(89) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
 !!!!!     pseudo-potential valence only      !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
+      WRITE(89) CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
       WRITE(88,'(5E20.12)') (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(89) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
 !!!!!     core-charge density (pseudized)     !!!!!
       READ(10,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
+      WRITE(89) CSEL
       READ(10,*) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
+      WRITE(89) (POTCAR_DATA (I),I=1,FROM_PP%R%NMAX)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       DO I = 1, Grid%n
          COREDEN(I) = PAW%tcore(I)*AUTOA
@@ -1471,12 +1562,14 @@
       WRITE(88,'(5E20.12)') (SPLINE_VALUE (I),I=1,FROM_PP%R%NMAX)
 
 !!!!!     wave-function     !!!!!
-      WRITE(6,*) 'nbase=', PAW%nbase
+!      WRITE(6,*) 'nbase=', PAW%nbase
       DO I = 1, PAW%nbase
          !!!!!   pseudo  wave-function   !!!!!
            READ(10,'(A80)') CSEL
            WRITE(88,'(A80)') CSEL
+           WRITE(89) CSEL
            READ(10,*) (POTCAR_DATA (K),K=1,FROM_PP%R%NMAX)
+           WRITE(89) (POTCAR_DATA (K),K=1,FROM_PP%R%NMAX)
            DO K = 1, Grid%n
               WPS(K) = PAW%tphi(K,I)/SQRT(AUTOA)
            ENDDO
@@ -1493,7 +1586,9 @@
          !!!!!   ae  wave-function   !!!!!
            READ(10,'(A80)') CSEL
            WRITE(88,'(A80)') CSEL
+           WRITE(89) CSEL
            READ(10,*) (POTCAR_DATA (K),K=1,FROM_PP%R%NMAX)
+           WRITE(89) (POTCAR_DATA (K),K=1,FROM_PP%R%NMAX)
            DO K = 1, Grid%n
               WAE(K) = PAW%phi(K,I)/SQRT(AUTOA)
            ENDDO
@@ -1508,6 +1603,7 @@
            WRITE(88,'(5E20.12)') (SPLINE_VALUE (K),K=1,FROM_PP%R%NMAX)
       ENDDO
       WRITE(88,*) 'End of Dataset'
+      WRITE(89) 'End of Dataset'
 100   CONTINUE
 
 500      FORMAT(F19.13, 6X, A1)
@@ -1516,6 +1612,7 @@
       DEALLOCATE(SPLINE_COEF, SPLINE_VALUE, SPLINE_DATA)
       CLOSE(10)
       CLOSE(88)
+      CLOSE(89)
 
        END SUBROUTINE WRITE_POTCAR
 
