@@ -105,7 +105,6 @@ PROGRAM atompaw
 
   CALL Report_pseudo_energies(PAW,ifen)
 
-
   CLOSE(ifinput)
   CLOSE(ifen)
 

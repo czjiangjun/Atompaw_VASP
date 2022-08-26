@@ -41,6 +41,7 @@ MODULE pseudodata
      REAL(8), POINTER :: DRC(:,:,:,:),mLic(:,:,:)
      REAL(8), POINTER :: DRCC(:,:,:,:),DRCjkl(:,:,:,:,:),mLcc(:,:,:),Dcj(:,:)
      REAL(8) :: coretol
+     REAL(8) :: chag_val
   END  TYPE Pseudoinfo
 
   CONTAINS

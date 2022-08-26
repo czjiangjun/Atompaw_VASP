@@ -362,7 +362,7 @@ CONTAINS
     CALL VASP_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
     CALL makebasis_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
    ELSE IF (Projectorindex==VASPRRKJ) THEN
-           WRITE(6,*) 'TEST_VASP'
+!           WRITE(6,*) 'TEST_VASP'
     CALL VASP_RRKJ(Grid,Pot,Orthoindex,ifinput,success)
    ENDIF
 

@@ -38,15 +38,15 @@ v
 c
 v
 1
-1.65  1.51   1.64    1.51
+1.86  1.51   1.54    1.51 # 1.85 1.51 1.54 1.51
 y
--0.60    # 能量往大调压制波函数
+-0.66   # -0.70 能量往大调压制波函数
 n
 y
-0.42    # 能量往大调压制波函数
+0.05    # 0.05 能量往大调压制波函数
 n
-Vanderbilt vasprrkj  gramschmidtortho  Besselshape
-1 3   MTROULLIER
+vasprrkj  vanderbiltortho  Besselshape  #Vanderbilt vasprrkj  vanderbiltortho  Besselshape
+1 3   bessel  #1 3   MTROULLIER
 1.5
 1.5
 1.6
