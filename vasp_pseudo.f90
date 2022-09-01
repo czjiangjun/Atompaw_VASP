@@ -321,6 +321,9 @@
 
 !!!!!!!!!!!!!  Method_1:   POTPSC = POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
       POTPSC_TEST(:) =  - POTPS_EFF(:) - POTPS_TEST(:)
+!      DO j=1, PP%R%NMAX
+!         WRITE(94,'(6f20.8)') PP%R%R(j), POTPSC_TEST(j)
+!      ENDDO
 
 !!!!!!!!!!!!   Method_2:   POTPSC = A*sin(qloc*r)/r FROM POTAEC DIRACTLY     !!!!!!!!!!!!!!!!!!!!!!!!
       DO j = 1, PP%R%NMAX
@@ -562,6 +565,7 @@
 
       Q_00 = integrator(Grid, FC%coreden, 1, Grid%n)
       Q_v = Pot_AE%q - Q_00
+      paw%chag_val = Q_v
 !      WRITE(6,*) 'Q_00=', Q_00
 
       OPEN(UNIT=14,FILE='ATOM_CORE',STATUS='UNKNOWN',IOSTAT=IERR)
@@ -742,7 +746,6 @@
 !            Q_00 = (integrator(Grid, PAW%den, 1, irc)-integrator(Grid,PAW%tden,1, irc))  &
 !             + (integrator(Grid, FC%coreden, 1, irc)-integrator(Grid, PAW%tcore,1, irc))
          Q_00 = (integrator(Grid, PAW%den, 1, irc)-integrator(Grid,PAW%tden,1, irc)) 
-         paw%chag_val = Q_00
          Q_00c = (integrator(Grid, FC%coreden, 1, irc)-integrator(Grid, PAW%tcore,1, irc))
 
 !        Q_00 = 2.4
@@ -773,6 +776,9 @@
          DO j=1,Grid%n 
             WRITE(IU18,'(6f20.8)') Grid%r(j)*AUTOA, -PotPS(j)*RYTOEV, -Pot_eff(j)*RYTOEV, -Pot_teff(j)*RYTOEV
          ENDDO
+
+
+
 !         STOP   !! POTPS_EFF TEST CORRECT
 
 !!!!!!!!!!!!!  POTPSC = POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
@@ -831,10 +837,11 @@
 
          CALL GENERATE_POTCARLIB(INFO, PP)
 
-        CALL GENERATE_POTCARDATA (INFO, PP, CHANNELS, Grid, FC%coreden, PAW, PotAEr)
+        CALL GENERATE_POTCARDATA (INFO, PP, CHANNELS, Grid, FC%coreden, PAW, PotPS)
 
         WRITE(6, *) 'GENERATE_POTCAR'
         CALL WRITE_POTCAR(INFO, PP)
+        STOP
 
 
          DEALLOCATE(RHO, V, RHOAE00, CRHODE, RHOLM)
@@ -1287,6 +1294,574 @@
         
       END SUBROUTINE SOLVEBESL_Q
 
+      SUBROUTINE GENERATE_POTCARDATA (INFO, FROM_PP, CHANNELS, Grid, COREDEN, PAW, POTPS)
+         IMPLICIT COMPLEX(q)   (C)
+         IMPLICIT REAL(q)  (A-B,D-H,O-Z)
+!         TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
+         TYPE(potcar), POINTER :: FROM_PP
+         TYPE(INFO_STRUCT) :: INFO
+         TYPE(in_struct) IO
+         TYPE(PseudoInfo) :: PAW
+         Type(GridInfo) :: Grid
+
+!      CHARACTER*40 SZNAMP         ! header
+      CHARACTER*80 :: CSEL
+      CHARACTER(LEN=4) :: PARAM_CHARACTER
+      REAL(q)  ::   POTCAR_PARAM, COREDEN(Grid%n), POTAE(Grid%n), POTPS(Grid%n)
+      REAL(q)  ::   POTCAR_G_PARAM, POTCAR_R_PARAM
+!      REAL(q)  ::   WAE(Grid%n,PAW%nbase), WPS(Grid%n,PAW%nbase)
+      REAL(q)  ::   WAE(Grid%n), WPS(Grid%n)
+      INTEGER  ::   XC_TYPE, L1, L2, NMAX, NRANGE
+      REAL(q), ALLOCATABLE :: POTCAR_DATA(:)
+      REAL(q), ALLOCATABLE :: SPLINE_COEF(:,:), SPLINE_VALUE(:), SPLINE_DATA(:)
+      LOGICAL  ::   PARAM_LOG
+
+      INTEGER :: ifinput,ifen,Z, IU6, Kcut
+      INTEGER :: NTYP, NTYPD, LDIM, LDIM2, LMDIM,CHANNELS, LMAX, LMMAX, LI, MI, LMI
+      INTEGER :: LMAX_TABLE, LYMAX, NCUT 
+      INTEGER :: CH1, CH2, LL, LLP, LMIN, LMAIN
+      REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
+      REAL(q) ROOT(2), QR, Qloc, R_CUT
+      REAL(q) :: DHARTREE, QCORE,SCALE, DOUBLEAE, EXCG
+!      REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
+      REAL(q), ALLOCATABLE :: POTAE_EFF(:), DPOTAE_EFF(:), POTPS_EFF(:)
+      REAL(q), ALLOCATABLE :: POTPS_G(:), CORPS_G(:), RHOPS_G(:)
+      REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOPS00(:)
+      REAL(q), ALLOCATABLE :: POTAEC(:), POTPSC_TEST(:), POT_TEST(:), POTAE_TEST(:), POTPS_TEST(:)
+      REAL(q), ALLOCATABLE :: POTPSC_CHECK(:)
+      REAL(q), ALLOCATABLE :: CRHODE(:,:)
+      REAL(q), ALLOCATABLE :: RHOLM(:), DLM(:), DLLMM(:,:,:)!, GAUSSIAN(:)
+      REAL(q), ALLOCATABLE :: DHXC(:,:), QPAW(:,:,:)
+      REAL(q), ALLOCATABLE :: TMP(:),DTMP(:),VTMP(:,:,:), DIJ(:,:), DION(:,:)
+      REAL(q), ALLOCATABLE :: PARWKINAE(:,:), PARWKINPS(:,:)
+      CHARACTER(LEN=2) :: TYPE(1)
+      LOGICAL ::   LPAW, UNSCREN, LXCADD
+!      INTEGER, EXTERNAL :: MAXL1
+!      LOGICAL, OPTIONAL :: success
+      LOGICAL :: success
+!      INTEGER, OPTIONAL :: IMESH
+      INTEGER :: IMESH
+      REAL(q), EXTERNAL :: ERRF
+
+      IU6 = -1
+      LDIM = 8
+      LDIM2 = (LDIM*(LDIM+1))/2
+      LMDIM = 64
+      ALLOCATE(POTCAR_DATA(NPSPTS))
+      ALLOCATE(SPLINE_VALUE(FROM_PP%R%NMAX))
+      ALLOCATE(SPLINE_DATA(Grid%n))
+      ALLOCATE(SPLINE_COEF(1:3, 1:Grid%n))
+      ALLOCATE(QPAW(FROM_PP%LMAX, FROM_PP%LMAX, 0:2*FROM_PP%LMAX))
+      ALLOCATE(TMP(FROM_PP%R%NMAX))
+
+!!!!!!!!_GENERATE_DATA_VASP_RHOAE_!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+      DO I = 1, Grid%n
+         COREDEN(I) = PAW%core(I)*AUTOA
+      ENDDO
+      
+!      DO I=1, FROM_PP%R%NMAX
+!         IF (FROM_PP%R%R(I) .GT. Grid%r(PAW%irc)*AUTOA) EXIT
+!      ENDDO
+!      NCUT = I+1
+
+      CALL SPLINE(Grid%r*AUTOA, COREDEN, SPLINE_COEF(1,1:Grid%n),  &
+     &       SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+      DO I=1, FROM_PP%R%NMAX
+          SPLINE_VALUE(I) = ISPLINE(FROM_PP%R%R(I), Grid%r*AUTOA, COREDEN,  &
+     &      SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+          FROM_PP%RHOAE(I) = SPLINE_VALUE(I)
+      ENDDO
+      DO I=1, FROM_PP%R%NMAX
+         WRITE(96,*) FROM_PP%R%R(I), FROM_PP%RHOAE(I)
+      ENDDO
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+
+!!!!!!!!_GENERATE_DATA_VASP_RHOPS_!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+      DO I = 1, Grid%n
+         COREDEN(I) = PAW%tcore(I)*AUTOA
+      ENDDO
+      CALL SPLINE(Grid%r*AUTOA, COREDEN, SPLINE_COEF(1,1:Grid%n),  &
+     &       SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+      DO I=1, FROM_PP%R%NMAX
+          SPLINE_VALUE(I) = ISPLINE(FROM_PP%R%R(I), Grid%r*AUTOA, COREDEN,  &
+     &      SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+          FROM_PP%RHOPS(I) = SPLINE_VALUE(I)
+      ENDDO
+      DO I=1, FROM_PP%R%NMAX
+         WRITE(97,*) FROM_PP%R%R(I), FROM_PP%RHOPS(I)
+      ENDDO
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+
+!!!!!!!!_GENERATE_DATA_WAVE-Function_!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      
+      DO I = 1, PAW%nbase
+         !!!!!   pseudo  wave-function   !!!!!
+           DO K = 1, Grid%n
+              WPS(K) = PAW%tphi(K,I)/SQRT(AUTOA)
+           ENDDO
+           
+           DO K = Grid%n, 1, -1
+              IF (PAW%tphi(K,I) .GT. 1.0E-6) EXIT
+           ENDDO
+           Kcut = K
+
+           DO K = FROM_PP%R%NMAX, 1, -1
+              IF (FROM_PP%WPS(K,I) .GT. 1.0E-6) EXIT
+           ENDDO
+           NCUT = K
+           
+           SPLINE_VALUE = 0.d0
+           CALL SPLINE(Grid%r*AUTOA, WPS, SPLINE_COEF(1,1:Kcut),  &
+     &             SPLINE_COEF(2,1:Kcut), SPLINE_COEF(3,1:Kcut), Kcut)
+           DO K=1, NCUT
+                  SPLINE_VALUE(K) = ISPLINE(FROM_PP%R%R(K), Grid%r*AUTOA, WPS,  &
+     &           SPLINE_COEF(1,1:Kcut),  SPLINE_COEF(2,1:Kcut), SPLINE_COEF(3,1:Kcut), Kcut)
+                FROM_PP%WPS(K,I) = SPLINE_VALUE(K)
+           ENDDO
+
+!           DO K=1, FROM_PP%R%NMAX
+!                          WRITE(98,*) FROM_PP%R%R(K), FROM_PP%WPS(K,I), SPLINE_VALUE(K)
+!           ENDDO
+!                          WRITE(98,*) 
+        !!!!!!   ae  wave-function   !!!!!
+           DO K = 1, Grid%n
+              WAE(K) = PAW%phi(K,I)/SQRT(AUTOA)
+           ENDDO
+           CALL SPLINE(Grid%r*AUTOA, WAE, SPLINE_COEF(1,1:Kcut),  &
+     &             SPLINE_COEF(2,1:Kcut), SPLINE_COEF(3,1:Kcut), Kcut)
+           DO K=1, NCUT
+                  SPLINE_VALUE(K) = ISPLINE(FROM_PP%R%R(K), Grid%r*AUTOA, WAE,  &
+     &           SPLINE_COEF(1,1:Kcut),  SPLINE_COEF(2,1:Kcut), SPLINE_COEF(3,1:Kcut), Kcut)
+                 FROM_PP%WAE(K,I) = SPLINE_VALUE(K)
+!                          WRITE(99,*) FROM_PP%R%R(K), FROM_PP%WAE(K,I), SPLINE_VALUE(K)
+           ENDDO
+
+!           DO K=1, FROM_PP%R%NMAX
+!                          WRITE(99,*) FROM_PP%R%R(K), FROM_PP%WAE(K,I), SPLINE_VALUE(K)
+!           ENDDO
+!                          WRITE(99,*) 
+      ENDDO
+!      STOP
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+       SCALE = 2.0*sqrt(PI0)
+
+       CALL SET_SIMP(FROM_PP%R)
+
+       QPAW = 0.d0
+!!   QPAW =\int(\phi_i\phi_i-\tilde\phi_i\tilde\phi_j)r^L\mathrm{d}r 
+      DO CH1=1, FROM_PP%LMAX
+      DO CH2=1, FROM_PP%LMAX
+         LL= FROM_PP%LPS(CH1)
+         LLP= FROM_PP%LPS(CH2)
+         LMIN=ABS(LL-LLP) ; LMAX=ABS(LL+LLP)
+         DO LMAIN=LMIN, LMAX, 2
+            TMP(:)=(FROM_PP%WAE(:,CH1)*FROM_PP%WAE(:,CH2)-      &
+     &         FROM_PP%WPS(:,CH1)*FROM_PP%WPS(:,CH2))*FROM_PP%R%R(:)**LMAIN
+            CALL SIMPI(FROM_PP%R, TMP, SUM)
+            QPAW(CH1,CH2, LMAIN)=SUM
+            FROM_PP%QPAW(CH1,CH2, LMAIN)=SUM
+         ENDDO
+      ENDDO
+      ENDDO
+
+!       WRITE(6,*) 'TEST_QPAW:', FROM_PP%QPAW
+
+       ALLOCATE(RHOPS00(FROM_PP%R%NMAX), RHOAE00(FROM_PP%R%NMAX))
+
+      CALL SIMPI(FROM_PP%R,FROM_PP%RHOAE, QCORE)
+!      WRITE(6,*) 'QCORE=', QCORE, QCORE*SCALE
+!      CALL SIMPI(FROM_PP%R,FROM_PP%RHOPS, QTEST)
+!      WRITE(6,*) 'QCORE=', QTEST, QTEST*SCALE
+
+      LMMAX = (FROM_PP%LMAX+1)**2
+      LYMAX =MAXL1(FROM_PP)*2
+
+
+      FROM_PP%LMAX_CALC=LMAX
+      
+      CALL SET_PAW_AUG(NTYPD, FROM_PP, IU6, FROM_PP%LMAX_CALC, .TRUE.)
+!        WRITE(*,*) 'ZVAL=', FROM_ZVALF_ORIG
+!      WRITE(6,*) 'LYMAX=', LYMAX
+      ALLOCATE(RHO(FROM_PP%R%NMAX, LMMAX,1), V(FROM_PP%R%NMAX, LMMAX,1))
+      ALLOCATE(POT(FROM_PP%R%NMAX, LMMAX,1), POTAEC(FROM_PP%R%NMAX))
+      ALLOCATE(POTAE_EFF(FROM_PP%R%NMAX),DPOTAE_EFF(FROM_PP%R%NMAX), POTPS_EFF(FROM_PP%R%NMAX) )
+      ALLOCATE(POT_TEST(FROM_PP%R%NMAX),POTAE_TEST(FROM_PP%R%NMAX), POTPSC_TEST(FROM_PP%R%NMAX) )
+      ALLOCATE(POTPSC_CHECK(FROM_PP%R%NMAX))
+      ALLOCATE(POTPS_G(NPSPTS), CORPS_G(NPSPTS), RHOPS_G(NPSPTS))
+      ALLOCATE(POTPS_TEST(FROM_PP%R%NMAX))
+!      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
+      ALLOCATE(CRHODE(LDIM,LDIM))
+!      ALLOCATE(CRHODE(LDIM,LDIM), POT-AE(PP%R%NMAX))
+      ALLOCATE(RHOLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
+!      ALLOCATE(DLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
+!
+!
+      LMAX_TABLE=6; CALL YLM3ST_(LMAX_TABLE)
+!      DO j=1, PP%R%NMAX
+!         GAUSSIAN(j) = exp(-PP%R%R(j)**2/PP%R%R(1)**2/10000)
+!         WRITE(6,*) 'GAUSSIAN=', GAUSSIAN(j)
+!      ENDDO 
+! CRHODE is n_ij (n_occ)    # 价电子轨道的占据数
+      CALL SET_CRHODE_ATOM(CRHODE,FROM_PP)
+! RHOLM is f_LM            #  价电子占据数构造 f_LM
+      CALL TRANS_RHOLM(CRHODE, RHOLM, FROM_PP)
+! RHO is density of valence # 价电子密度 n_lm^v = f_LM\langle\ps_i|\psi_j\rangle
+      RHO = 0
+      CALL RAD_CHARGE(RHO(:,:,1), FROM_PP%R, RHOLM(:), FROM_PP%LMAX, FROM_PP%LPS, FROM_PP%WAE)
+      RHOAE00 = 0
+      DO i =1,CHANNELS
+         LI = FROM_PP%LPS(i)
+         DO MI = 1, 2*LI+1
+            LMI = LI*LI + MI
+!            WRITE(6,*) 'TRHOV=', RHO(FROM_PP%R%NMAX, LI+1,1)
+            DO j =1, FROM_PP%R%NMAX
+             RHOAE00(j) = RHOAE00(j)+RHO(j,LMI,1)
+            ENDDO
+         ENDDO
+      ENDDO
+!      CALL SIMPI(PP%R,RHOAE00+PP%RHOAE*SCALE, QTEST)
+!      FROM_PP%ZVALF_ORIG = paw%chag_val
+!      WRITE(6,*) 'QTEST=', QTEST, FROM_PP%ZVALF_ORIG
+
+!!!!!!!!! POTAE = V_H[n_v]+V_XC[n_v+n_c] != POTAEC  !!!!!!!!!     
+!      POT = 0
+!      POTAEC = 0
+!      RHO = 0
+!      CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
+!      CALL RAD_POT(FROM_PP%R, 1, 1, 1, .FALSE., &
+!                   RHO, FROM_PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+!      POTAE_TEST(:) = POT(:,1,1)
+!!!!!!!!!!!!!!!!!!!!!!!! POTAEC = V_H[n_Zc] = V_H[n_c]+ Z/r !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      Z=ANINT(FROM_PP%ZVALF_ORIG+QCORE*SCALE)
+!      Z=INT(QCORE)
+
+      CALL RAD_POT_HAR(0, FROM_PP%R, POTAEC, FROM_PP%RHOAE, DHARTEE)
+      DO j=1, FROM_PP%R%NMAX
+!         WRITE(6,*) 'TEST =', Z/PP%R%R(j)*FELECT
+         POTAEC(j) =   POTAEC(j)/SCALE - Z/FROM_PP%R%R(j)*FELECT  !!!   V_H[n_Zc] =  V_H[n_c] - Z/r 
+!         POTAEC(j) =   POTAEC(j)/SCALE - (Z-PP%ZVALF_ORIG)/PP%R%R(j)*FELECT  !!!   V_H[n_Zc] =  V_H[n_c] - Z/r 
+      ENDDO
+!      DO j =1, FROM_PP%R%NMAX
+!         WRITE(95,*) FROM_PP%R%R(j), POTAEC(j)
+!      ENDDO
+      WRITE(6,*) 'THE_NUCLEAR_CHARGE: ',Z
+
+!!!!!!!!!!!!!!!!!!!!!!!! POTAE_TEST =  V_H[n_v] +V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!
+      POT = 0
+      POT_TEST = 0
+      CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
+      CALL RAD_POT(FROM_PP%R, 1, 1, 1, .FALSE., &
+                   RHO, FROM_PP%RHOAE, POT_TEST, POT, DOUBLEAE, EXCG)
+      FROM_PP%POTAE(:) = - POT(:,1,1)/SCALE                       !!!    POTAE = V_H[n_v] +V_XC[n_v+n_c] 
+!      POTAE_TEST(:) =  -POT(:,1,1)/SCALE + PP%ZVALF_ORIG/PP%R%R(:)/SCALE/SQRT(2.0)
+!      DO j=1, PP%R%NMAX
+!         POTAE_TEST(j) = - POT(j,1,1)/SCALE + FELECT*Z*(1.0-ERRF(PP%R%R(j)/2.0/AUTOA))/PP%R%R(j)
+!         WRITE(6,'(8f20.8)') PP%R%R(j), POT(j,1,1)/SCALE, ERRF(PP%R%R(j)/AUTOA), &
+!     &             PP%POTAE(j)+POT(j,1,1)/SCALE, FELECT*Z*ERRF(PP%R%R(j)/PP%R%R(200))/PP%R%R(j) , &
+!     &             FELECT*Z/PP%R%R(j)/(PP%POTAE(j)+POT(j,1,1)/SCALE )
+!      ENDDO
+!      DO j =1, FROM_PP%R%NMAX
+!         WRITE(95,*) FROM_PP%R%R(j), -POTAE_TEST(j)
+!      ENDDO
+!      STOP
+
+!!!!!!!!!!!!!!!!!   POTAE_EFF = V_H[n_Zc] + V_H[n_v] +V_XC[n_v+n_c]  !!!!!!!!!!!!!!!!!!
+      POT = 0
+      CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
+      CALL RAD_POT(FROM_PP%R, 1, 1, 1, .FALSE., &
+                   RHO, FROM_PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+      POTAE_EFF(:) =  - POT(:,1,1)/SCALE
+
+!!!!!!!!!!!!!!!!!!!!!!!! POTPS_EFF = A*sin(qloc*r)/r !!!!!!!!!!!!!!!!!!!!!!!!!!!
+      DO j = 1, FROM_PP%R%NMAX
+         POTPS_EFF(j) = POTAE_EFF(j)
+      ENDDO
+      CALL GRAD(FROM_PP%R, POTAE_EFF, DPOTAE_EFF)
+
+!      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
+      alpha = 1.0-DPOTAE_EFF(FROM_PP%R%NMAX-41)/POTAE_EFF(FROM_PP%R%NMAX-41)
+!      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
+      beta = 1.0
+
+      CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
+!      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
+!      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
+      QR = ROOT(1); Qloc = QR/FROM_PP%R%R(FROM_PP%R%NMAX-41)
+!      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
+      alpha = POTAE_EFF(FROM_PP%R%NMAX-41)*FROM_PP%R%R(FROM_PP%R%NMAX-41)/sin(QR)
+!      WRITE(6,*) 'alpha=' , alpha
+      DO j = 1, FROM_PP%R%NMAX-41
+         QR = Qloc*FROM_PP%R%R(j)
+         POTPS_EFF(j) = alpha*sin(QR)/FROM_PP%R%R(j)
+!         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
+!         WRITE(6,'(5f20.8)') PP%R%R(j), PP%POTPSC(j), POTPS_EFF(j), PP%POTAE(j), PP%POTPS(j)
+      ENDDO
+
+      RHO = 0
+      POTPSC_TEST = 0
+      POTPSC_CHECK = 0
+      POT_TEST = 0
+!!!!!!!!!!!!!  POTPS = V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c]  !!!!!!!!!!!!!!!!!!!!!!!!
+! RHO is \tilde RHO + \hat n
+      CALL RAD_CHARGE(RHO(:,:,1), FROM_PP%R, RHOLM(:), FROM_PP%LMAX, FROM_PP%LPS, FROM_PP%WPS)
+      CALL RAD_AUG_CHARGE(  RHO(:,:,1), FROM_PP%R, RHOLM, FROM_PP%LMAX, FROM_PP%LPS,  &
+              LYMAX, FROM_PP%AUG, FROM_PP%QPAW )
+
+      RHOPS00 = 0
+      DO i =1,CHANNELS
+         LI = FROM_PP%LPS(i)
+         DO MI = 1, 2*LI+1
+            LMI = LI*LI + MI
+!           WRITE(6,*) 'TRHOV=', RHO(PP%R%NMAX, LI+1,1)
+            RHOPS00(:) = RHOPS00(:)+RHO(:,LMI,1)
+         ENDDO
+      ENDDO
+!      CALL SIMPI(PP%R,RHOPS00, QTEST)
+!      WRITE(6,*) 'QTEST=', QTEST
+      POT = 0
+!      CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
+      CALL RAD_POT(FROM_PP%R, 1, 1, 1, .FALSE., &
+                   RHO, FROM_PP%RHOPS, POTPSC_TEST, POT, DOUBLEAE, EXCG)
+!      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
+!                   RHO, PP%RHOPS, PP%POTPSC, POT, DOUBLEAE, EXCG)
+      POTPS_TEST(:) =  POT(:,1,1)/SCALE
+
+      DO I = 1, Grid%n
+         POTPS(I) = -POTPS(I)*RYTOEV
+      ENDDO
+      CALL SPLINE(Grid%r*AUTOA, POTPS, SPLINE_COEF(1,1:Grid%n),  &
+     &       SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+      DO I=1, FROM_PP%R%NMAX
+          SPLINE_VALUE(I) = ISPLINE(FROM_PP%R%R(I), Grid%r*AUTOA, POTPS,  &
+     &      SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
+          FROM_PP%POTPS(I) = SPLINE_VALUE(I)
+      ENDDO
+!      DO j =1, FROM_PP%R%NMAX
+!         WRITE(95,*) FROM_PP%R%R(j), FROM_PP%POTPS(j)
+!      ENDDO
+!      STOP
+!!!!!!!!!!!!!  Method_1:   POTPSC = POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
+      POTPSC_TEST(:) =  - POTPS_EFF(:) - POTPS_TEST(:)
+      FROM_PP%POTPSC(:) = POTPSC_TEST(:)
+
+!      DO j =1, FROM_PP%R%NMAX
+!         WRITE(95,*) FROM_PP%R%R(j), POTPSC_TEST(j)
+!      ENDDO
+!      STOP
+!!!!!!!!!!!!   Method_2:   POTPSC = A*sin(qloc*r)/r FROM POTAEC DIRACTLY     !!!!!!!!!!!!!!!!!!!!!!!!
+!      DO j = 1, FROM_PP%R%NMAX
+!         POTPSC_TEST(j) = POTAEC(j)
+!      ENDDO
+!      CALL GRAD(FROM_PP%R, POTAEC, DPOTAE_EFF)
+!
+!      IMESH = 40
+!!      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
+!      alpha = 1.0-DPOTAE_EFF(FROM_PP%R%NMAX-IMESH)/POTAEC(FROM_PP%R%NMAX-IMESH)
+!!      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
+!      beta = 1.0
+!
+!      CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
+!!      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
+!!      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
+!      QR = ROOT(1); Qloc = QR/FROM_PP%R%R(FROM_PP%R%NMAX-IMESH)
+!!      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
+!      alpha = POTAEC(FROM_PP%R%NMAX-IMESH)*FROM_PP%R%R(FROM_PP%R%NMAX-IMESH)/sin(QR)
+!!      WRITE(6,*) 'alpha=' , alpha
+!      DO j = 1, FROM_PP%R%NMAX-IMESH
+!         QR = Qloc*FROM_PP%R%R(j)
+!         POTPSC_TEST(j) = alpha*sin(QR)/FROM_PP%R%R(j)
+!!         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
+!!         WRITE(6,'(5f20.8)') PP%R%R(j), PP%POTPSC(j), POTPS_EFF(j), PP%POTAE(j), PP%POTPS(j)
+!      ENDDO
+
+      DO j =1, FROM_PP%R%NMAX
+         WRITE(95,*) FROM_PP%R%R(j), POTPSC_TEST(j)
+      ENDDO
+!      STOP
+!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POTPS !!!!!  ----------------------    !     
+
+!!      CALL FOURPOT_TO_Q( PP%RDEP, POT, PP%PSP(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
+      POTPS_G(:) = 0.0
+!      POTPS_TEST(:) = POTPS_TEST(:)
+!      DO i = 1, PP%R%NMAX
+!          CALL RANDOM_SEED()
+!          CALL RANDOM_NUMBER(random_x)
+!          POTPSC_TEST(I) = -random_x
+!          WRITE(6,*) 'TEST=', POTPS_TEST(I)
+!      ENDDO
+
+!      POTPSC_CHECK(:) = FROM_PP%POTPSC(:)
+!      POTPSC_CHECK(:) =  POTPSC_TEST(:)
+      CALL FOURPOT_TO_Q_CHECK( FROM_PP%R%R(FROM_PP%R%NMAX), FROM_PP%ZVALF_ORIG, POTPSC_TEST,   &
+     &             POTPS_G, SIZE(FROM_PP%PSP,1), FROM_PP%PSGMAX/SIZE(FROM_PP%PSP,1), FROM_PP%R, IU6)
+
+
+!      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), POTPS_TEST, POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
+
+!      OPEN(UNIT=23,FILE='VASP_G_POTLOC',STATUS='UNKNOWN',IOSTAT=IERR)
+!      IF (IERR/=0) THEN
+!         OPEN(UNIT=23,FILE='VASP_G_POTLOC',STATUS='OLD')
+!      ENDIF
+!      DO j =1, SIZE(FROM_PP%PSP,1)
+!         WRITE(94,*) FROM_PP%PSP(j,1), FROM_PP%PSP(j,2), POTPS_G(j)
+!      ENDDO
+
+      DO j=1, SIZE(FROM_PP%PSP,1)
+         FROM_PP%PSP(j,2) = POTPS_G(j)!, FROM_PP%PSPCOR(j) ,  &
+!     &                          FROM_PP%PSPRHO(j) = FROM_PP%PSPTAU(j)
+      ENDDO
+
+!      STOP
+
+!   ---------------- !!!!!! FOR CHECK !!!!! -------------------
+      
+!      POTPSC_CHECK(:) = 0.0
+!!       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
+!!     &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
+!       CALL POTTORHO( FROM_PP%ZVALF_ORIG, NPSPTS, POTPS_G, FROM_PP%PSGMAX/NPSPTS, &
+!     &            .TRUE. , FROM_PP%R%NMAX, FROM_PP%R%R ,  POTPSC_CHECK )                        
+
+
+!   ---------------- !!!!!! CORE-CHG IN RECIPROCAL SPACE FROM RHOPS !!!!!  ----------------------    !     
+      CORPS_G(:) = 0.0
+      CALL FOURPOT_TO_Q( FROM_PP%R%R(FROM_PP%R%NMAX), FROM_PP%RHOPS,   &
+     &             CORPS_G, SIZE(FROM_PP%PSP,1), FROM_PP%PSGMAX/SIZE(FROM_PP%PSP,1), FROM_PP%R, IU6)
+!      DO j =1, SIZE(FROM_PP%PSP,1)
+!         WRITE(93,*) FROM_PP%PSP(j,1),  FROM_PP%PSPCOR(j), -CORPS_G(j)
+!      ENDDO
+
+      DO j=1, SIZE(FROM_PP%PSP,1)
+         FROM_PP%PSPCOR(j) = -CORPS_G(j)
+      ENDDO
+
+!      STOP
+!   ---------------- !!!!!! PSEUDO-CHG IN RECIPROCAL SPACE FROM  PSPRHO !!!!!  ----------------------    !     
+      RHOPS_G(:) = 0.0
+      CALL FOURPOT_TO_Q( FROM_PP%R%R(FROM_PP%R%NMAX), RHOPS00+FROM_PP%RHOPS,   &
+     &             RHOPS_G, SIZE(FROM_PP%PSP,1),FROM_PP%PSGMAX/SIZE(FROM_PP%PSP,1), FROM_PP%R, IU6)
+
+!      OPEN(UNIT=27,FILE='VASP_G_PSPRHO',STATUS='UNKNOWN',IOSTAT=IERR)
+!      IF (IERR/=0) THEN
+!         OPEN(UNIT=27,FILE='VASP_G_PSPRHO',STATUS='OLD')
+!      ENDIF
+!      DO j =1, SIZE(FROM_PP%PSP,1)
+!         WRITE(92,*) FROM_PP%PSP(j,1), FROM_PP%PSPRHO(j), -RHOPS_G(j)/4.0/SQRT(PI0)
+!      ENDDO
+
+      DO j=1, SIZE(FROM_PP%PSP,1)
+         FROM_PP%PSPRHO(j) = -RHOPS_G(j)/4.0/SQRT(PI0)
+      ENDDO
+
+!      STOP
+
+!      WRITE(6,*) 'VALUE=', FROM_PP%ZVALF_ORIG
+!      WRITE(6,*) 'NPSPTS=', NPSPTS
+!      WRITE(6,*) 'PSGMAX=', FROM_PP%PSGMAX
+!      WRITE(6,*) 'NMAX=', FROM_PP%R%NMAX
+!   ---------------- !!!!!! DION !!!!!  ----------------------    !     
+ 
+      ALLOCATE(DTMP(FROM_PP%R%NMAX))
+      ALLOCATE(PARWKINAE(FROM_PP%R%NMAX, FROM_PP%LMAX), PARWKINPS(FROM_PP%R%NMAX, FROM_PP%LMAX))
+      ALLOCATE(DIJ(FROM_PP%LMAX, FROM_PP%LMAX), DION(FROM_PP%LMAX, FROM_PP%LMAX))
+
+!!    T|\psi_i\rangle = (-\nabla^2-\dfrac{l(l+1)}2) \psi_i     
+      DO I=1,FROM_PP%LMAX
+         CALL GRAD(FROM_PP%R,FROM_PP%WAE(:,I),TMP)
+         CALL GRAD(FROM_PP%R,TMP,DTMP)
+         DO J =1, FROM_PP%R%NMAX
+            PARWKINAE(J,I) = -(DTMP(J)-FROM_PP%LPS(I)*(FROM_PP%LPS(I)+1)/FROM_PP%R%R(J)/FROM_PP%R%R(J)*FROM_PP%WAE(J,I))*HSQDTM
+         ENDDO
+!         WRITE(6,'(5F20.10)') (PP%R%R(J),PP%WAE(J,I),PP%WPS(J,I), & !PP%PARWKINAE(J,I),PP%PARWKINPS(J,I), &
+!        &   -(DTMP(J)-PP%LPS(I)*(PP%LPS(I)+1)/PP%R%R(J)/PP%R%R(J)*PP%WAE(J,I))*HSQDTM, &
+!        &   TMP(J),J=1,PP%R%NMAX)
+      ENDDO
+      
+      DO I=1,FROM_PP%LMAX
+         CALL GRAD(FROM_PP%R,FROM_PP%WPS(:,I),TMP)
+         CALL GRAD(FROM_PP%R,TMP,DTMP)
+         DO J =1, FROM_PP%R%NMAX
+            PARWKINPS(J,I) = -(DTMP(J)-FROM_PP%LPS(I)*(FROM_PP%LPS(I)+1)/FROM_PP%R%R(J)/FROM_PP%R%R(J)*FROM_PP%WPS(J,I))*HSQDTM
+         ENDDO
+!         WRITE(6,'(5F20.10)') (PP%R%R(J),PP%WAE(J,I),PP%WPS(J,I), & !PP%PARWKINAE(J,I),PP%PARWKINPS(J,I), &
+!        &   -(DTMP(J)-PP%LPS(I)*(PP%LPS(I)+1)/PP%R%R(J)/PP%R%R(J)*PP%WPS(J,I))*HSQDTM, &
+!        &   TMP(J),J=1,PP%R%NMAX)
+      ENDDO
+
+!!  Dion_{ij}=\langle\phi_i|T+V_eff|\phi_j\rangle-\langle\tilde\phi_i|T+\tilde{V}_eff|\tilde\phi_j\rangle
+!!      -\int\hat{Q}^{00}_{ij}(r)\tilde{V}(r)\mathrm{d}r
+
+      !! DIJ=\langle\phi_i|T+V_eff|\phi_j\rangle-\langle\tilde\phi_i|T+\tilde{V}_eff|\tilde\phi_j\rangle
+      DIJ = 0.d0
+      DO CH1=1, FROM_PP%LMAX
+      DO CH2=1, FROM_PP%LMAX
+         TMP = 0.d0
+         IF (FROM_PP%LPS(CH1) == FROM_PP%LPS(CH2)) THEN
+                 DO I=1, FROM_PP%R%NMAX
+                    TMP(I)= FROM_PP%WAE(I,CH1)*PARWKINAE(I,CH2)-FROM_PP%WAE(I,CH1)*PARWKINPS(I,CH2) &
+     & +FROM_PP%WAE(I,CH1)*POTAE_EFF(I)*FROM_PP%WAE(I,CH2)-FROM_PP%WPS(I,CH1)*POTPS_EFF(I)*FROM_PP%WPS(I,CH2)
+                 ENDDO
+                 CALL SIMPI(FROM_PP%R, TMP, DIJ(CH1, CH2))
+         ENDIF
+      ENDDO
+      ENDDO
+
+!!!! " unscreen "
+!!      -\int\hat{Q}^{00}_{ij}(r)\tilde{V}(r)\mathrm{d}r
+
+      LYMAX=MAXVAL(FROM_PP%LPS(1:FROM_PP%LMAX))
+      IF (ASSOCIATED(FROM_PP%QPAW)) LYMAX=LYMAX*2
+      LMMAX=(LYMAX+1)**2
+      ALLOCATE(VTMP(FROM_PP%R%NMAX,LMMAX,1))
+      ALLOCATE(DLM(FROM_PP%LMDIM*FROM_PP%LMDIM), DLLMM(FROM_PP%LMDIM,FROM_PP%LMDIM,1), DHXC(FROM_PP%LMDIM,FROM_PP%LMDIM))
+!      SCALE=1/(2*SQRT(PI))      
+      VTMP=0; VTMP(:,1,1)=POTPS_EFF(:)*SCALE
+!      ! Reconstruct the PAW strength parameters for the reference system
+      CALL RAD_POT_WEIGHT(FROM_PP%R,1,LYMAX,VTMP)
+      DLM=0; DLLMM=0; DHXC=0
+      CALL RAD_AUG_PROJ(VTMP(:,:,1),FROM_PP%R,DLM,FROM_PP%LMAX,FROM_PP%LPS,LYMAX,FROM_PP%AUG,QPAW)
+      CALL TRANS_DLM(DLLMM(:,:,1),DLM,FROM_PP)
+
+      DHXC=-DLLMM(:,:,1)
+!      ! Compute D_{ij} and Q_{ij}
+      LM=1
+      DO CH1=1,FROM_PP%LMAX
+      LMP=1
+      DO CH2=1,FROM_PP%LMAX
+         DIJ(CH1,CH2)=DIJ(CH1,CH2)+DHXC(LM,LMP)
+!         QIJ(I,J)=PP%QION(I,J)
+         LMP=LMP+2*FROM_PP%LPS(CH2)+1
+      ENDDO
+      LM=LM+2*FROM_PP%LPS(CH1)+1
+      ENDDO      
+
+!! Make DION hermitian
+      DO CH1=1,FROM_PP%LMAX
+      DO CH2=1,FROM_PP%LMAX
+         DION(CH1,CH2)=(DIJ(CH1,CH2)+DIJ(CH2,CH1))/2.0/5.0/(floor((CH1-1)/2.0)+1)
+         DION(CH2,CH1)=DION(CH1,CH2)
+!         WRITE(6,*) 'DION:', DION(CH1,CH2), FROM_PP%DION(CH1,CH2)!, DION(CH1,CH2)/PP%DION(CH1,CH2)
+         FROM_PP%DION(CH1,CH2) = DION(CH1,CH2) !, DION(CH1,CH2)/PP%DION(CH1,CH2)
+      ENDDO      
+      ENDDO      
+
+      DEALLOCATE(POTCAR_DATA, SPLINE_VALUE, SPLINE_DATA, SPLINE_COEF)
+
+      DEALLOCATE(RHOPS00, RHOAE00)
+      DEALLOCATE(RHO, V, POT, POTAEC, POTAE_EFF, DPOTAE_EFF, POTPS_EFF)
+      DEALLOCATE(POT_TEST,POTAE_TEST, POTPSC_TEST, POTPSC_CHECK, POTPS_G, CORPS_G, RHOPS_G)
+      DEALLOCATE(POTPS_TEST, CRHODE, RHOLM)
+!      DEALLOCATE(V1, V2, CRHODE, POT-AE, DLM)
+
+      DEALLOCATE(VTMP, DLLMM, DHXC)
+      DEALLOCATE(TMP, DTMP, PARWKINAE, PARWKINPS, QPAW)
+      DEALLOCATE(DIJ, DION)
+
+!      STOP
+
+      RETURN
+
+       END SUBROUTINE GENERATE_POTCARDATA
+
       SUBROUTINE GENERATE_POTCARLIB (INFO, FROM_PP)
 !         TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
          TYPE(potcar), POINTER :: FROM_PP
@@ -1620,495 +2195,6 @@
 
        END SUBROUTINE GENERATE_POTCARLIB
 
-      SUBROUTINE GENERATE_POTCARDATA (INFO, FROM_PP, CHANNELS, Grid, COREDEN, PAW, POTAE)
-         IMPLICIT COMPLEX(q)   (C)
-         IMPLICIT REAL(q)  (A-B,D-H,O-Z)
-!         TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
-         TYPE(potcar), POINTER :: FROM_PP
-         TYPE(INFO_STRUCT) :: INFO
-         TYPE(in_struct) IO
-         TYPE(PseudoInfo) :: PAW
-         Type(GridInfo) :: Grid
-
-!      CHARACTER*40 SZNAMP         ! header
-      CHARACTER*80 :: CSEL
-      CHARACTER(LEN=4) :: PARAM_CHARACTER
-      REAL(q)  ::   POTCAR_PARAM, COREDEN(Grid%n), POTAE(Grid%n)
-      REAL(q)  ::   POTCAR_G_PARAM, POTCAR_R_PARAM
-!      REAL(q)  ::   WAE(Grid%n,PAW%nbase), WPS(Grid%n,PAW%nbase)
-      REAL(q)  ::   WAE(Grid%n), WPS(Grid%n)
-      INTEGER  ::   XC_TYPE, L1, L2, NMAX, NRANGE
-      REAL(q), ALLOCATABLE :: POTCAR_DATA(:)
-      REAL(q), ALLOCATABLE :: SPLINE_COEF(:,:), SPLINE_VALUE(:), SPLINE_DATA(:)
-      LOGICAL  ::   PARAM_LOG
-
-      INTEGER :: ifinput,ifen,Z, IU6
-      INTEGER :: NTYP, NTYPD, LDIM, LDIM2, LMDIM,CHANNELS, LMAX, LMMAX, LI, MI, LMI
-      INTEGER :: LMAX_TABLE, LYMAX 
-      INTEGER :: CH1, CH2, LL, LLP, LMIN, LMAIN
-      REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
-      REAL(q) ROOT(2), QR, Qloc, R_CUT
-      REAL(q) :: DHARTREE, QCORE,SCALE, DOUBLEAE, EXCG
-!      REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
-      REAL(q), ALLOCATABLE :: POTAE_EFF(:), DPOTAE_EFF(:), POTPS_EFF(:)
-      REAL(q), ALLOCATABLE :: POTPS_G(:), CORPS_G(:), RHOPS_G(:)
-      REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOPS00(:)
-      REAL(q), ALLOCATABLE :: POTAEC(:), POTPSC_TEST(:), POT_TEST(:), POTAE_TEST(:), POTPS_TEST(:)
-      REAL(q), ALLOCATABLE :: POTPSC_CHECK(:)
-      REAL(q), ALLOCATABLE :: CRHODE(:,:)
-      REAL(q), ALLOCATABLE :: RHOLM(:), DLM(:), DLLMM(:,:,:)!, GAUSSIAN(:)
-      REAL(q), ALLOCATABLE :: DHXC(:,:), QPAW(:,:,:)
-      REAL(q), ALLOCATABLE :: TMP(:),DTMP(:),VTMP(:,:,:), DIJ(:,:), DION(:,:)
-      REAL(q), ALLOCATABLE :: PARWKINAE(:,:), PARWKINPS(:,:)
-      CHARACTER(LEN=2) :: TYPE(1)
-      LOGICAL ::   LPAW, UNSCREN, LXCADD
-!      INTEGER, EXTERNAL :: MAXL1
-!      LOGICAL, OPTIONAL :: success
-      LOGICAL :: success
-!      INTEGER, OPTIONAL :: IMESH
-      INTEGER :: IMESH
-      REAL(q), EXTERNAL :: ERRF
-
-      IU6 = -1
-      LDIM = 8
-      LDIM2 = (LDIM*(LDIM+1))/2
-      LMDIM = 64
-      ALLOCATE(POTCAR_DATA(NPSPTS))
-      ALLOCATE(SPLINE_VALUE(FROM_PP%R%NMAX))
-      ALLOCATE(SPLINE_DATA(Grid%n))
-      ALLOCATE(SPLINE_COEF(1:3, 1:Grid%n))
-      ALLOCATE(QPAW(FROM_PP%LMAX, FROM_PP%LMAX, 0:2*FROM_PP%LMAX))
-      ALLOCATE(TMP(FROM_PP%R%NMAX))
-
-!!!!!!!!_GENERATE_DATA_VASP_RHOAE_!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
-      DO I = 1, Grid%n
-         COREDEN(I) = PAW%core(I)*AUTOA
-      ENDDO
-      CALL SPLINE(Grid%r*AUTOA, COREDEN, SPLINE_COEF(1,1:Grid%n),  &
-     &       SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
-      DO I=1, FROM_PP%R%NMAX
-          SPLINE_VALUE(I) = ISPLINE(FROM_PP%R%R(I), Grid%r*AUTOA, COREDEN,  &
-     &      SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
-          FROM_PP%RHOAE(I) = SPLINE_VALUE(I)
-      ENDDO
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
-
-!!!!!!!!_GENERATE_DATA_VASP_RHOPS_!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
-      DO I = 1, Grid%n
-         COREDEN(I) = PAW%tcore(I)*AUTOA
-      ENDDO
-      CALL SPLINE(Grid%r*AUTOA, COREDEN, SPLINE_COEF(1,1:Grid%n),  &
-     &       SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
-      DO I=1, FROM_PP%R%NMAX
-          SPLINE_VALUE(I) = ISPLINE(FROM_PP%R%R(I), Grid%r*AUTOA, COREDEN,  &
-     &      SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
-          FROM_PP%RHOPS(I) = SPLINE_VALUE(I)
-      ENDDO
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
-
-!!!!!!!!_GENERATE_DATA_WAVE-Function_!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      DO I = 1, PAW%nbase
-         !!!!!   pseudo  wave-function   !!!!!
-           DO K = 1, Grid%n
-              WPS(K) = PAW%tphi(K,I)/SQRT(AUTOA)
-           ENDDO
-           CALL SPLINE(Grid%r*AUTOA, WPS, SPLINE_COEF(1,1:Grid%n),  &
-     &             SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
-           DO K=1, FROM_PP%R%NMAX
-                  SPLINE_VALUE(K) = ISPLINE(FROM_PP%R%R(K), Grid%r*AUTOA, WPS,  &
-     &           SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
-                          WRITE(98,*) FROM_PP%R%R(K), FROM_PP%WPS(K,I), SPLINE_VALUE(K)
-                FROM_PP%WPS(K,I) = SPLINE_VALUE(K)
-           ENDDO
-                          WRITE(98,*) 
-        !!!!!!   ae  wave-function   !!!!!
-           DO K = 1, Grid%n
-              WAE(K) = PAW%phi(K,I)/SQRT(AUTOA)
-           ENDDO
-           CALL SPLINE(Grid%r*AUTOA, WAE, SPLINE_COEF(1,1:Grid%n),  &
-     &             SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
-           DO K=1, FROM_PP%R%NMAX
-                  SPLINE_VALUE(K) = ISPLINE(FROM_PP%R%R(K), Grid%r*AUTOA, WAE,  &
-     &           SPLINE_COEF(1,1:Grid%n),  SPLINE_COEF(2,1:Grid%n), SPLINE_COEF(3,1:Grid%n), Grid%n)
-                          WRITE(99,*) FROM_PP%R%R(K), FROM_PP%WAE(K,I), SPLINE_VALUE(K)
-                FROM_PP%WAE(K,I) = SPLINE_VALUE(K)
-           ENDDO
-                          WRITE(99,*) 
-      ENDDO
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
-       SCALE = 2.0*sqrt(PI0)
-
-       CALL SET_SIMP(FROM_PP%R)
-
-       QPAW = 0.d0
-!!   QPAW =\int(\phi_i\phi_i-\tilde\phi_i\tilde\phi_j)r^L\mathrm{d}r 
-      DO CH1=1, FROM_PP%LMAX
-      DO CH2=1, FROM_PP%LMAX
-         LL= FROM_PP%LPS(CH1)
-         LLP= FROM_PP%LPS(CH2)
-         LMIN=ABS(LL-LLP) ; LMAX=ABS(LL+LLP)
-         DO LMAIN=LMIN, LMAX, 2
-            TMP(:)=(FROM_PP%WAE(:,CH1)*FROM_PP%WAE(:,CH2)-      &
-     &         FROM_PP%WPS(:,CH1)*FROM_PP%WPS(:,CH2))*FROM_PP%R%R(:)**LMAIN
-            CALL SIMPI(FROM_PP%R, TMP, SUM)
-            QPAW(CH1,CH2, LMAIN)=SUM
-            FROM_PP%QPAW(CH1,CH2, LMAIN)=SUM
-         ENDDO
-      ENDDO
-      ENDDO
-
-!       WRITE(6,*) 'TEST_QPAW:', FROM_PP%QPAW
-
-       ALLOCATE(RHOPS00(FROM_PP%R%NMAX), RHOAE00(FROM_PP%R%NMAX))
-
-      CALL SIMPI(FROM_PP%R,FROM_PP%RHOAE, QCORE)
-!      WRITE(6,*) 'QCORE=', QCORE, QCORE*SCALE
-!      CALL SIMPI(FROM_PP%R,FROM_PP%RHOPS, QTEST)
-!      WRITE(6,*) 'QCORE=', QTEST, QTEST*SCALE
-
-      LMMAX = (FROM_PP%LMAX+1)**2
-      LYMAX =MAXL1(FROM_PP)*2
-
-
-      FROM_PP%LMAX_CALC=LMAX
-      
-      CALL SET_PAW_AUG(NTYPD, FROM_PP, IU6, FROM_PP%LMAX_CALC, .TRUE.)
-!        WRITE(*,*) 'ZVAL=', FROM_ZVALF_ORIG
-!      WRITE(6,*) 'LYMAX=', LYMAX
-      ALLOCATE(RHO(FROM_PP%R%NMAX, LMMAX,1), V(FROM_PP%R%NMAX, LMMAX,1))
-      ALLOCATE(POT(FROM_PP%R%NMAX, LMMAX,1), POTAEC(FROM_PP%R%NMAX))
-      ALLOCATE(POTAE_EFF(FROM_PP%R%NMAX),DPOTAE_EFF(FROM_PP%R%NMAX), POTPS_EFF(FROM_PP%R%NMAX) )
-      ALLOCATE(POT_TEST(FROM_PP%R%NMAX),POTAE_TEST(FROM_PP%R%NMAX), POTPSC_TEST(FROM_PP%R%NMAX) )
-      ALLOCATE(POTPSC_CHECK(FROM_PP%R%NMAX))
-      ALLOCATE(POTPS_G(NPSPTS), CORPS_G(NPSPTS), RHOPS_G(NPSPTS))
-      ALLOCATE(POTPS_TEST(FROM_PP%R%NMAX))
-!      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
-      ALLOCATE(CRHODE(LDIM,LDIM))
-!      ALLOCATE(CRHODE(LDIM,LDIM), POT-AE(PP%R%NMAX))
-      ALLOCATE(RHOLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
-!      ALLOCATE(DLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
-!
-!
-      LMAX_TABLE=6; CALL YLM3ST_(LMAX_TABLE)
-!      DO j=1, PP%R%NMAX
-!         GAUSSIAN(j) = exp(-PP%R%R(j)**2/PP%R%R(1)**2/10000)
-!         WRITE(6,*) 'GAUSSIAN=', GAUSSIAN(j)
-!      ENDDO 
-! CRHODE is n_ij (n_occ)    # 价电子轨道的占据数
-      CALL SET_CRHODE_ATOM(CRHODE,FROM_PP)
-! RHOLM is f_LM            #  价电子占据数构造 f_LM
-      CALL TRANS_RHOLM(CRHODE, RHOLM, FROM_PP)
-! RHO is density of valence # 价电子密度 n_lm^v = f_LM\langle\ps_i|\psi_j\rangle
-      RHO = 0
-      CALL RAD_CHARGE(RHO(:,:,1), FROM_PP%R, RHOLM(:), FROM_PP%LMAX, FROM_PP%LPS, FROM_PP%WAE)
-      RHOAE00 = 0
-      DO i =1,CHANNELS
-         LI = FROM_PP%LPS(i)
-         DO MI = 1, 2*LI+1
-            LMI = LI*LI + MI
-!            WRITE(6,*) 'TRHOV=', RHO(FROM_PP%R%NMAX, LI+1,1)
-            DO j =1, FROM_PP%R%NMAX
-             RHOAE00(j) = RHOAE00(j)+RHO(j,LMI,1)
-            ENDDO
-         ENDDO
-      ENDDO
-!      CALL SIMPI(PP%R,RHOAE00+PP%RHOAE*SCALE, QTEST)
-!      WRITE(6,*) 'QTEST=', QTEST
-
-!!!!!!!!! POTAE = V_H[n_v]+V_XC[n_v+n_c] != POTAEC  !!!!!!!!!     
-!      POT = 0
-!      POTAEC = 0
-!!      RHO = 0
-!      CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
-!      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-!                   RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
-!      POTAE_TEST(:) = POT(:,1,1)
-!!!!!!!!!!!!!!!!!!!!!!!! POTAEC = V_H[n_Zc] = V_H[n_c]+ Z/r !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      Z=ANINT(FROM_PP%ZVALF_ORIG+QCORE*SCALE)
-!      Z=INT(QCORE)
-
-      CALL RAD_POT_HAR(0, FROM_PP%R, POTAEC, FROM_PP%RHOAE, DHARTEE)
-      DO j=1, FROM_PP%R%NMAX
-!         WRITE(6,*) 'TEST =', Z/PP%R%R(j)*FELECT
-         POTAEC(j) =   POTAEC(j)/SCALE - Z/FROM_PP%R%R(j)*FELECT  !!!   V_H[n_Zc] =  V_H[n_c] - Z/r 
-!         POTAEC(j) =   POTAEC(j)/SCALE - (Z-PP%ZVALF_ORIG)/PP%R%R(j)*FELECT  !!!   V_H[n_Zc] =  V_H[n_c] - Z/r 
-      ENDDO
-!      DO j =1, PP%R%NMAX
-!         WRITE(6,*) POTAEC(j)
-!      ENDDO
-      WRITE(6,*) 'THE_NUCLEAR_CHARGE: ',Z
-
-!!!!!!!!!!!!!!!!!!!!!!!! POTAE_TEST =  V_H[n_v] +V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!
-      POT = 0
-      POT_TEST = 0
-      CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
-      CALL RAD_POT(FROM_PP%R, 1, 1, 1, .FALSE., &
-                   RHO, FROM_PP%RHOAE, POT_TEST, POT, DOUBLEAE, EXCG)
-      POTAE_TEST(:) =  POT(:,1,1)/SCALE                       !!!    POTAE = V_H[n_v] +V_XC[n_v+n_c] 
-!      POTAE_TEST(:) =  -POT(:,1,1)/SCALE + PP%ZVALF_ORIG/PP%R%R(:)/SCALE/SQRT(2.0)
-!      DO j=1, PP%R%NMAX
-!         POTAE_TEST(j) = - POT(j,1,1)/SCALE + FELECT*Z*(1.0-ERRF(PP%R%R(j)/2.0/AUTOA))/PP%R%R(j)
-!         WRITE(6,'(8f20.8)') PP%R%R(j), POT(j,1,1)/SCALE, ERRF(PP%R%R(j)/AUTOA), &
-!     &             PP%POTAE(j)+POT(j,1,1)/SCALE, FELECT*Z*ERRF(PP%R%R(j)/PP%R%R(200))/PP%R%R(j) , &
-!     &             FELECT*Z/PP%R%R(j)/(PP%POTAE(j)+POT(j,1,1)/SCALE )
-!      ENDDO
-
-!!!!!!!!!!!!!!!!!   POTAE_EFF = V_H[n_Zc] + V_H[n_v] +V_XC[n_v+n_c]  !!!!!!!!!!!!!!!!!!
-      POT = 0
-!      CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
-      CALL RAD_POT(FROM_PP%R, 1, 1, 1, .FALSE., &
-                   RHO, FROM_PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
-      POTAE_EFF(:) =  - POT(:,1,1)/SCALE
-
-!!!!!!!!!!!!!!!!!!!!!!!! POTPS_EFF = A*sin(qloc*r)/r !!!!!!!!!!!!!!!!!!!!!!!!!!!
-      DO j = 1, FROM_PP%R%NMAX
-         POTPS_EFF(j) = POTAE_EFF(j)
-      ENDDO
-      CALL GRAD(FROM_PP%R, POTAE_EFF, DPOTAE_EFF)
-
-!      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
-      alpha = 1.0-DPOTAE_EFF(FROM_PP%R%NMAX-41)/POTAE_EFF(FROM_PP%R%NMAX-41)
-!      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
-      beta = 1.0
-
-      CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
-!      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
-!      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
-      QR = ROOT(1); Qloc = QR/FROM_PP%R%R(FROM_PP%R%NMAX-41)
-!      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
-      alpha = POTAE_EFF(FROM_PP%R%NMAX-41)*FROM_PP%R%R(FROM_PP%R%NMAX-41)/sin(QR)
-!      WRITE(6,*) 'alpha=' , alpha
-      DO j = 1, FROM_PP%R%NMAX-41
-         QR = Qloc*FROM_PP%R%R(j)
-         POTPS_EFF(j) = alpha*sin(QR)/FROM_PP%R%R(j)
-!         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
-!         WRITE(6,'(5f20.8)') PP%R%R(j), PP%POTPSC(j), POTPS_EFF(j), PP%POTAE(j), PP%POTPS(j)
-      ENDDO
-
-      RHO = 0
-      POTPSC_TEST = 0
-      POTPSC_CHECK = 0
-      POT_TEST = 0
-!!!!!!!!!!!!!  POTPS = V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c]  !!!!!!!!!!!!!!!!!!!!!!!!
-! RHO is \tilde RHO + \hat n
-      CALL RAD_CHARGE(RHO(:,:,1), FROM_PP%R, RHOLM(:), FROM_PP%LMAX, FROM_PP%LPS, FROM_PP%WPS)
-      CALL RAD_AUG_CHARGE(  RHO(:,:,1), FROM_PP%R, RHOLM, FROM_PP%LMAX, FROM_PP%LPS,  &
-              LYMAX, FROM_PP%AUG, FROM_PP%QPAW )
-
-      RHOPS00 = 0
-      DO i =1,CHANNELS
-         LI = FROM_PP%LPS(i)
-         DO MI = 1, 2*LI+1
-            LMI = LI*LI + MI
-!           WRITE(6,*) 'TRHOV=', RHO(PP%R%NMAX, LI+1,1)
-            RHOPS00(:) = RHOPS00(:)+RHO(:,LMI,1)
-         ENDDO
-      ENDDO
-!      CALL SIMPI(PP%R,RHOPS00, QTEST)
-!      WRITE(6,*) 'QTEST=', QTEST
-      POT = 0
-!      CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
-      CALL RAD_POT(FROM_PP%R, 1, 1, 1, .FALSE., &
-                   RHO, FROM_PP%RHOPS, POTPSC_TEST, POT, DOUBLEAE, EXCG)
-!      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-!                   RHO, PP%RHOPS, PP%POTPSC, POT, DOUBLEAE, EXCG)
-      POTPS_TEST(:) =  POT(:,1,1)/SCALE
-
-!!!!!!!!!!!!!  Method_1:   POTPSC = POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
-      POTPSC_TEST(:) =  - POTPS_EFF(:) - POTPS_TEST(:)
-
-!!!!!!!!!!!!   Method_2:   POTPSC = A*sin(qloc*r)/r FROM POTAEC DIRACTLY     !!!!!!!!!!!!!!!!!!!!!!!!
-      DO j = 1, FROM_PP%R%NMAX
-         POTPSC_TEST(j) = POTAEC(j)
-      ENDDO
-      CALL GRAD(FROM_PP%R, POTAEC, DPOTAE_EFF)
-
-      IMESH = 40
-!      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
-      alpha = 1.0-DPOTAE_EFF(FROM_PP%R%NMAX-IMESH)/POTAEC(FROM_PP%R%NMAX-IMESH)
-!      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
-      beta = 1.0
-
-      CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
-!      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
-!      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
-      QR = ROOT(1); Qloc = QR/FROM_PP%R%R(FROM_PP%R%NMAX-IMESH)
-!      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
-      alpha = POTAEC(FROM_PP%R%NMAX-IMESH)*FROM_PP%R%R(FROM_PP%R%NMAX-IMESH)/sin(QR)
-!      WRITE(6,*) 'alpha=' , alpha
-      DO j = 1, FROM_PP%R%NMAX-IMESH
-         QR = Qloc*FROM_PP%R%R(j)
-         POTPSC_TEST(j) = alpha*sin(QR)/FROM_PP%R%R(j)
-!         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
-!         WRITE(6,'(5f20.8)') PP%R%R(j), PP%POTPSC(j), POTPS_EFF(j), PP%POTAE(j), PP%POTPS(j)
-      ENDDO
-
-!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POTPS !!!!!  ----------------------    !     
-
-!!      CALL FOURPOT_TO_Q( PP%RDEP, POT, PP%PSP(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
-      POTPS_G(:) = 0.0
-!      POTPS_TEST(:) = POTPS_TEST(:)
-!      DO i = 1, PP%R%NMAX
-!          CALL RANDOM_SEED()
-!          CALL RANDOM_NUMBER(random_x)
-!          POTPSC_TEST(I) = -random_x
-!          WRITE(6,*) 'TEST=', POTPS_TEST(I)
-!      ENDDO
-
-!      POTPSC_CHECK(:) = PP%POTPSC(:)
-      POTPSC_CHECK(:) = POTPSC_TEST(:)
-      CALL FOURPOT_TO_Q_CHECK( FROM_PP%R%R(FROM_PP%R%NMAX), FROM_PP%ZVALF_ORIG, POTPSC_CHECK,   &
-     &             POTPS_G, SIZE(FROM_PP%PSP,1), FROM_PP%PSGMAX/SIZE(FROM_PP%PSP,1), FROM_PP%R, IU6)
-
-
-!      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), POTPS_TEST, POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
-
-!      OPEN(UNIT=23,FILE='VASP_G_POTLOC',STATUS='UNKNOWN',IOSTAT=IERR)
-!      IF (IERR/=0) THEN
-!         OPEN(UNIT=23,FILE='VASP_G_POTLOC',STATUS='OLD')
-!      ENDIF
-      DO j=1, SIZE(FROM_PP%PSP,1)
-         FROM_PP%PSP(j,2) = POTPS_G(j)!, FROM_PP%PSPCOR(j) ,  &
-!     &                          FROM_PP%PSPRHO(j) = FROM_PP%PSPTAU(j)
-      ENDDO
-
-!   ---------------- !!!!!! FOR CHECK !!!!! -------------------
-      
-      POTPSC_CHECK(:) = 0.0
-!       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
-!     &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
-       CALL POTTORHO( FROM_PP%ZVALF_ORIG, NPSPTS, POTPS_G, FROM_PP%PSGMAX/NPSPTS, &
-     &            .TRUE. , FROM_PP%R%NMAX, FROM_PP%R%R ,  POTPSC_CHECK )                        
-
-
-!   ---------------- !!!!!! CORE-CHG IN RECIPROCAL SPACE FROM RHOPS !!!!!  ----------------------    !     
-      CORPS_G(:) = 0.0
-      CALL FOURPOT_TO_Q( FROM_PP%R%R(FROM_PP%R%NMAX), FROM_PP%RHOPS,   &
-     &             CORPS_G, SIZE(FROM_PP%PSP,1), FROM_PP%PSGMAX/SIZE(FROM_PP%PSP,1), FROM_PP%R, IU6)
-      DO j=1, SIZE(FROM_PP%PSP,1)
-         FROM_PP%PSPCOR(j) = -CORPS_G(j)
-      ENDDO
-
-!   ---------------- !!!!!! PSEUDO-CHG IN RECIPROCAL SPACE FROM  PSPRHO !!!!!  ----------------------    !     
-      RHOPS_G(:) = 0.0
-      CALL FOURPOT_TO_Q( FROM_PP%R%R(FROM_PP%R%NMAX), RHOPS00+FROM_PP%RHOPS,   &
-     &             RHOPS_G, SIZE(FROM_PP%PSP,1),FROM_PP%PSGMAX/SIZE(FROM_PP%PSP,1), FROM_PP%R, IU6)
-
-!      OPEN(UNIT=27,FILE='VASP_G_PSPRHO',STATUS='UNKNOWN',IOSTAT=IERR)
-!      IF (IERR/=0) THEN
-!         OPEN(UNIT=27,FILE='VASP_G_PSPRHO',STATUS='OLD')
-!      ENDIF
-      DO j=1, SIZE(FROM_PP%PSP,1)
-         FROM_PP%PSPRHO(j) = -RHOPS_G(j)/4.0/SQRT(PI0)
-      ENDDO
-
-!      WRITE(6,*) 'VALUE=', FROM_PP%ZVALF_ORIG
-!      WRITE(6,*) 'NPSPTS=', NPSPTS
-!      WRITE(6,*) 'PSGMAX=', FROM_PP%PSGMAX
-!      WRITE(6,*) 'NMAX=', FROM_PP%R%NMAX
-!   ---------------- !!!!!! DION !!!!!  ----------------------    !     
- 
-      ALLOCATE(DTMP(FROM_PP%R%NMAX))
-      ALLOCATE(PARWKINAE(FROM_PP%R%NMAX, FROM_PP%LMAX), PARWKINPS(FROM_PP%R%NMAX, FROM_PP%LMAX))
-      ALLOCATE(DIJ(FROM_PP%LMAX, FROM_PP%LMAX), DION(FROM_PP%LMAX, FROM_PP%LMAX))
-
-!!    T|\psi_i\rangle = (-\nabla^2-\dfrac{l(l+1)}2) \psi_i     
-      DO I=1,FROM_PP%LMAX
-         CALL GRAD(FROM_PP%R,FROM_PP%WAE(:,I),TMP)
-         CALL GRAD(FROM_PP%R,TMP,DTMP)
-         DO J =1, FROM_PP%R%NMAX
-            PARWKINAE(J,I) = -(DTMP(J)-FROM_PP%LPS(I)*(FROM_PP%LPS(I)+1)/FROM_PP%R%R(J)/FROM_PP%R%R(J)*FROM_PP%WAE(J,I))*HSQDTM
-         ENDDO
-!         WRITE(6,'(5F20.10)') (PP%R%R(J),PP%WAE(J,I),PP%WPS(J,I), & !PP%PARWKINAE(J,I),PP%PARWKINPS(J,I), &
-!        &   -(DTMP(J)-PP%LPS(I)*(PP%LPS(I)+1)/PP%R%R(J)/PP%R%R(J)*PP%WAE(J,I))*HSQDTM, &
-!        &   TMP(J),J=1,PP%R%NMAX)
-      ENDDO
-      
-      DO I=1,FROM_PP%LMAX
-         CALL GRAD(FROM_PP%R,FROM_PP%WPS(:,I),TMP)
-         CALL GRAD(FROM_PP%R,TMP,DTMP)
-         DO J =1, FROM_PP%R%NMAX
-            PARWKINPS(J,I) = -(DTMP(J)-FROM_PP%LPS(I)*(FROM_PP%LPS(I)+1)/FROM_PP%R%R(J)/FROM_PP%R%R(J)*FROM_PP%WPS(J,I))*HSQDTM
-         ENDDO
-!         WRITE(6,'(5F20.10)') (PP%R%R(J),PP%WAE(J,I),PP%WPS(J,I), & !PP%PARWKINAE(J,I),PP%PARWKINPS(J,I), &
-!        &   -(DTMP(J)-PP%LPS(I)*(PP%LPS(I)+1)/PP%R%R(J)/PP%R%R(J)*PP%WPS(J,I))*HSQDTM, &
-!        &   TMP(J),J=1,PP%R%NMAX)
-      ENDDO
-
-!!  Dion_{ij}=\langle\phi_i|T+V_eff|\phi_j\rangle-\langle\tilde\phi_i|T+\tilde{V}_eff|\tilde\phi_j\rangle
-!!      -\int\hat{Q}^{00}_{ij}(r)\tilde{V}(r)\mathrm{d}r
-
-      !! DIJ=\langle\phi_i|T+V_eff|\phi_j\rangle-\langle\tilde\phi_i|T+\tilde{V}_eff|\tilde\phi_j\rangle
-      DIJ = 0.d0
-      DO CH1=1, FROM_PP%LMAX
-      DO CH2=1, FROM_PP%LMAX
-         TMP = 0.d0
-         IF (FROM_PP%LPS(CH1) == FROM_PP%LPS(CH2)) THEN
-                 DO I=1, FROM_PP%R%NMAX
-                    TMP(I)= FROM_PP%WAE(I,CH1)*PARWKINAE(I,CH2)-FROM_PP%WAE(I,CH1)*PARWKINPS(I,CH2) &
-     & +FROM_PP%WAE(I,CH1)*POTAE_EFF(I)*FROM_PP%WAE(I,CH2)-FROM_PP%WPS(I,CH1)*POTPS_EFF(I)*FROM_PP%WPS(I,CH2)
-                 ENDDO
-                 CALL SIMPI(FROM_PP%R, TMP, DIJ(CH1, CH2))
-         ENDIF
-      ENDDO
-      ENDDO
-
-!!!! " unscreen "
-!!      -\int\hat{Q}^{00}_{ij}(r)\tilde{V}(r)\mathrm{d}r
-
-      LYMAX=MAXVAL(FROM_PP%LPS(1:FROM_PP%LMAX))
-      IF (ASSOCIATED(FROM_PP%QPAW)) LYMAX=LYMAX*2
-      LMMAX=(LYMAX+1)**2
-      ALLOCATE(VTMP(FROM_PP%R%NMAX,LMMAX,1))
-      ALLOCATE(DLM(FROM_PP%LMDIM*FROM_PP%LMDIM), DLLMM(FROM_PP%LMDIM,FROM_PP%LMDIM,1), DHXC(FROM_PP%LMDIM,FROM_PP%LMDIM))
-!      SCALE=1/(2*SQRT(PI))      
-      VTMP=0; VTMP(:,1,1)=POTPS_EFF(:)*SCALE
-!      ! Reconstruct the PAW strength parameters for the reference system
-      CALL RAD_POT_WEIGHT(FROM_PP%R,1,LYMAX,VTMP)
-      DLM=0; DLLMM=0; DHXC=0
-      CALL RAD_AUG_PROJ(VTMP(:,:,1),FROM_PP%R,DLM,FROM_PP%LMAX,FROM_PP%LPS,LYMAX,FROM_PP%AUG,QPAW)
-      CALL TRANS_DLM(DLLMM(:,:,1),DLM,FROM_PP)
-
-      DHXC=-DLLMM(:,:,1)
-!      ! Compute D_{ij} and Q_{ij}
-      LM=1
-      DO CH1=1,FROM_PP%LMAX
-      LMP=1
-      DO CH2=1,FROM_PP%LMAX
-         DIJ(CH1,CH2)=DIJ(CH1,CH2)+DHXC(LM,LMP)
-!         QIJ(I,J)=PP%QION(I,J)
-         LMP=LMP+2*FROM_PP%LPS(CH2)+1
-      ENDDO
-      LM=LM+2*FROM_PP%LPS(CH1)+1
-      ENDDO      
-
-!! Make DION hermitian
-      DO CH1=1,FROM_PP%LMAX
-      DO CH2=1,FROM_PP%LMAX
-         DION(CH1,CH2)=(DIJ(CH1,CH2)+DIJ(CH2,CH1))/2.0/5.0/(floor((CH1-1)/2.0)+1)
-         DION(CH2,CH1)=DION(CH1,CH2)
-         FROM_PP%DION(CH1,CH2) = DION(CH1,CH2) !, DION(CH1,CH2)/PP%DION(CH1,CH2)
-!         WRITE(6,*) 'DION:', DION(CH1,CH2), FROM_PP%DION(CH1,CH2)!, DION(CH1,CH2)/PP%DION(CH1,CH2)
-      ENDDO      
-      ENDDO      
-
-      DEALLOCATE(POTCAR_DATA, SPLINE_VALUE, SPLINE_DATA, SPLINE_COEF)
-
-      DEALLOCATE(RHOPS00, RHOAE00)
-      DEALLOCATE(RHO, V, POT, POTAEC, POTAE_EFF, DPOTAE_EFF, POTPS_EFF)
-      DEALLOCATE(POT_TEST,POTAE_TEST, POTPSC_TEST, POTPSC_CHECK, POTPS_G, CORPS_G, RHOPS_G)
-      DEALLOCATE(POTPS_TEST, CRHODE, RHOLM)
-!      DEALLOCATE(V1, V2, CRHODE, POT-AE, DLM)
-
-      DEALLOCATE(VTMP, DLLMM, DHXC)
-      DEALLOCATE(TMP, DTMP, PARWKINAE, PARWKINPS, QPAW)
-      DEALLOCATE(DIJ, DION)
-
-!      STOP
-
-      RETURN
-
-       END SUBROUTINE GENERATE_POTCARDATA
 
       SUBROUTINE WRITE_POTCAR (INFO, FROM_PP)
 !         TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
@@ -2171,7 +2257,7 @@
       ENDIF
 !!!!!      PSPCOR             !!!!!
       IF (CSEL=='c') THEN
-         WRITE(88,*) ' core charge-density (partial) '
+         WRITE(88,*) 'core charge-density (partial) '
          READ(89,*) (POTCAR_DATA (I),I=1,NPSPTS)
          WRITE(88,'(5E16.8)') (FROM_PP%PSPCOR(I), I=1,SIZE(FROM_PP%PSP,1))
       ELSE
@@ -2212,7 +2298,7 @@
         READ(89,'(2I12, F19.14)') L1, NL1, POTCAR_R_PARAM
         WRITE(88,'(2I12, F19.14)') L1, NL1, POTCAR_R_PARAM
         READ(89,*) (POTCAR_DATA (I),I=1,4)
-        WRITE(88,'(F19.14, 2F24.13)') (FROM_PP%DION(I,L),I=1,4)
+        WRITE(88,'(F19.14, 2F24.13)') ((FROM_PP%DION(I,J),I=2*L+1, 2*(L+1)), J=2*L+1,2*(L+1))
 !        WRITE(88,'(F19.14, 2F24.13)') (DION(I),I=1,4)
 
         DO LI = 1, NL1
@@ -2255,13 +2341,16 @@
       WRITE(88,'(A9,32X)')'(5E20.12)' 
 
       NRANGE = (PAW%l(PAW%nbase)+1)**4
-      DO I =1, 2
 !!!!!   augmentation charge (non spherical)   !!!!!
-         READ(89,'(A80)') CSEL
-         WRITE(88,'(A80)') CSEL
-         READ(89,*) (POTCAR_DATA (J),J=1,NRANGE)
-         WRITE(88,'(5E20.12)') (POTCAR_DATA (J),J=1,NRANGE)
-      ENDDO
+      READ(89,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(89,*) (POTCAR_DATA (J),J=1,NRANGE)
+      WRITE(88,'(5E20.12)') ((FROM_PP%QPAW (I,J,0),J=1, PAW%nbase),I=1, PAW%nbase)
+!!!!!   uccopancies in atom   !!!!!
+      READ(89,'(A80)') CSEL
+      WRITE(88,'(A80)') CSEL
+      READ(89,*) (POTCAR_DATA (J),J=1,NRANGE)
+      WRITE(88,'(5E20.12)') (POTCAR_DATA (J),J=1,NRANGE)
 !!!!!            grid              !!!!!
       READ(89,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
