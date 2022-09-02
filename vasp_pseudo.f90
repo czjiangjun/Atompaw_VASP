@@ -205,7 +205,8 @@
 !!      RHO = 0
 !      CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
 !      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-!                   RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+!     &            RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+!        CALL POP_XC_TYPE
 !      POTAE_TEST(:) = POT(:,1,1)
 
 !!!!!!!!!!!!!!!!!!!!!!!! POTAEC = V_H[n_Zc] = V_H[n_c]+ Z/r !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -228,7 +229,8 @@
       POT_TEST = 0
       CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
       CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-                   RHO, PP%RHOAE, POT_TEST, POT, DOUBLEAE, EXCG)
+     &            RHO, PP%RHOAE, POT_TEST, POT, DOUBLEAE, EXCG)
+      CALL POP_XC_TYPE
       POTAE_TEST(:) =  POT(:,1,1)/SCALE                       !!!    POTAE = V_H[n_v] +V_XC[n_v+n_c] 
 !      POTAE_TEST(:) =  -POT(:,1,1)/SCALE + PP%ZVALF_ORIG/PP%R%R(:)/SCALE/SQRT(2.0)
 !      DO j=1, PP%R%NMAX
@@ -242,7 +244,8 @@
       POT = 0
       CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
       CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-                   RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+     &            RHO, PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+      CALL POP_XC_TYPE
       POTAE_EFF(:) =  - POT(:,1,1)/SCALE
 
       OPEN(UNIT=19,FILE='VASP_POTAE',STATUS='UNKNOWN',IOSTAT=IERR)
@@ -255,6 +258,8 @@
      &                           -POTAEC(j), &
      &                           POTAE_EFF(j)
       ENDDO
+
+      PP%POTAE(:) = - POTAE_TEST(:)
 
 !!!!!!!!!!!!!!!!!!!!!!!! POTPS_EFF = A*sin(qloc*r)/r !!!!!!!!!!!!!!!!!!!!!!!!!!!
       DO j = 1, PP%R%NMAX
@@ -305,9 +310,10 @@
       POT = 0
       CALL PUSH_XC_TYPE(PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
       CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
-                   RHO, PP%RHOPS, POTPSC_TEST, POT, DOUBLEAE, EXCG)
+     &            RHO, PP%RHOPS, POTPSC_TEST, POT, DOUBLEAE, EXCG)
 !      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
 !                   RHO, PP%RHOPS, PP%POTPSC, POT, DOUBLEAE, EXCG)
+      CALL POP_XC_TYPE
       POTPS_TEST(:) =  POT(:,1,1)/SCALE
 
       OPEN(UNIT=25,FILE='VASP_POTPS',STATUS='UNKNOWN',IOSTAT=IERR)
@@ -318,6 +324,8 @@
       DO j=1, PP%R%NMAX
          WRITE(25,'(6f20.8)') PP%R%R(j), PP%POTPS(j), -POTPS_TEST(j), POTAE_EFF(j), POTPS_EFF(j)
       ENDDO
+
+      PP%POTPS(:) = -POTPS_TEST(:)
 
 !!!!!!!!!!!!!  Method_1:   POTPSC = POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
       POTPSC_TEST(:) =  - POTPS_EFF(:) - POTPS_TEST(:)
@@ -356,7 +364,7 @@
       IF (IERR/=0) THEN
          OPEN(UNIT=21,FILE='VASP_POTPSC',STATUS='OLD')
       ENDIF
-
+      PP%POTPSC(:) = POTPSC_TEST(:)
 
 !   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POTPS !!!!!  ----------------------    !     
 
@@ -384,7 +392,7 @@
          WRITE(IU19,'(6f20.8)') PP%PSP(j,1), PP%PSP(j,2), POTPS_G(j), PP%PSPCOR(j),  &
      &                          PP%PSPRHO(j), PP%PSPTAU(j)
       ENDDO
-
+      PP%PSP(:,2) = POTPS_G(:)
 !   ---------------- !!!!!! FOR CHECK !!!!! -------------------
       
       POTPSC_CHECK(:) = 0.0
@@ -410,7 +418,7 @@
       DO j=1, SIZE(PP%PSP,1)
          WRITE(IU21,'(6f20.8)') PP%PSP(j,1), PP%PSPCOR(j), -CORPS_G(j)
       ENDDO
-
+      PP%PSPCOR(:) = -CORPS_G(:)
 !   ---------------- !!!!!! PSEUDO-CHG IN RECIPROCAL SPACE FROM  PSPRHO !!!!!  ----------------------    !     
       RHOPS_G(:) = 0.0
       CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), RHOPS00+PP%RHOPS,   &
@@ -423,6 +431,7 @@
       DO j=1, SIZE(PP%PSP,1)
          WRITE(IU23,'(6f20.8)') PP%PSP(j,1), PP%PSPRHO(j), -RHOPS_G(j)/4.0/SQRT(PI0)
       ENDDO
+      PP%PSPRHO(j) = -RHOPS_G(j)/4.0/SQRT(PI0)
 
       WRITE(6,*) 'VALUE=', PP%ZVALF_ORIG
       WRITE(6,*) 'NPSPTS=', NPSPTS
@@ -488,7 +497,7 @@
      &         PP%WPS(:,CH1)*PP%WPS(:,CH2))*PP%R%R(:)**LMAIN
             CALL SIMPI(PP%R, TMP, SUM)
             QPAW(CH1,CH2, LMAIN)=SUM
-            WRITE(6,*) 'QPAW:', PP%QPAW(CH1,CH2, LMAIN), SUM
+!            WRITE(6,*) 'QPAW:', PP%QPAW(CH1,CH2, LMAIN), SUM
          ENDDO
       ENDDO
       ENDDO
@@ -527,11 +536,13 @@
       DO CH2=1,PP%LMAX
          DION(CH1,CH2)=(DIJ(CH1,CH2)+DIJ(CH2,CH1))/2.0/5.0/(floor((CH1-1)/2.0)+1)
          DION(CH2,CH1)=DION(CH1,CH2)
-         WRITE(6,*) 'DION:', DION(CH1,CH2), PP%DION(CH1,CH2)!, DION(CH1,CH2)/PP%DION(CH1,CH2)
-!         PP%DION(CH1, CH2) = DION(CH1, CH2)
+!         WRITE(6,*) 'DION:', DION(CH1,CH2), PP%DION(CH1,CH2)!, DION(CH1,CH2)/PP%DION(CH1,CH2)
+         PP%DION(CH1, CH2) = DION(CH1, CH2)
       ENDDO      
       ENDDO      
 
+!      CALL WRITE_POTCAR(INFO, PP)
+!      STOP
 
       DEALLOCATE(VTMP, DLLMM, DHXC)
       DEALLOCATE(TMP, DTMP, PARWKINAE, PARWKINPS, QPAW)
@@ -587,7 +598,8 @@
 !!!   PP%WAE = SQRT(AUTOAE) * PAW%phi/AUTOA  !!! SO THAT the DENSITY IS SAME !!!
       DO i=1, PAW%nbase
          DO j=1, Grid%n
-             WRITE(IU8,'(6f20.8)') Grid%r(j)*AUTOA, PAW%phi(j,i)/SQRT(AUTOA)
+             WRITE(IU8,'(6f20.8)') Grid%r(j)*AUTOA, PAW%phi(j,i)/SQRT(AUTOA)*PAW%wfrate(i), PAW%phi(j,i)*PAW%wfrate(i)   &
+     &                  , PAW%ophi(j,i)        
          ENDDO
          WRITE(IU8,*)
       ENDDO
@@ -649,7 +661,8 @@
 !!!   PP%WPS = SQRT(AUTOA) * PAW%tphi/AUTOA  !!! SO THAT the DENSITY IS SAME !!!
          DO i=1, PAW%nbase
             DO j=1, Grid%n
-               WRITE(IU13,'(6f20.8)') Grid%r(j)*AUTOA, PAW%tphi(j,i)/sqrt(AUTOA)
+               WRITE(IU13,'(6f20.8)') Grid%r(j)*AUTOA, PAW%tphi(j,i)/sqrt(AUTOA)*PAW%wfrate(i), PAW%tphi(j,i)*PAW%wfrate(i)   &
+     &                        , PAW%otphi(j,i)
             ENDDO
             WRITE(IU13,*)
          ENDDO
@@ -835,19 +848,20 @@
         CALL Report_Pseudopotential(Grid,PAW)
         CALL SPMatrixElements(Grid,FCPot,FC,PAW)
 
-         CALL GENERATE_POTCARLIB(INFO, PP)
+        CALL GENERATE_POTCARLIB(INFO, PP)
 
         CALL GENERATE_POTCARDATA (INFO, PP, CHANNELS, Grid, FC%coreden, PAW, PotPS)
 
-        WRITE(6, *) 'GENERATE_POTCAR'
+        WRITE(6, 300)
         CALL WRITE_POTCAR(INFO, PP)
-        STOP
 
+300     FORMAT(' !!! ----  GENERATE POTCAR  ---- !!! ',/)
 
          DEALLOCATE(RHO, V, RHOAE00, CRHODE, RHOLM)
          DEALLOCATE(POT, POTAE_EFF, DPOTAE_EFF, POTAEC)
          DEALLOCATE(PotHr, PotXCr, PotAEr, PotATr,PotAECr, PotPS, PotAE, PotAE00,  PotPSC)
          DEALLOCATE(pdensity, PotPSCr)
+!        STOP
         RETURN
 ! 
         END SUBROUTINE vasp_pseudo
@@ -1397,7 +1411,7 @@
       DO I = 1, PAW%nbase
          !!!!!   pseudo  wave-function   !!!!!
            DO K = 1, Grid%n
-              WPS(K) = PAW%tphi(K,I)/SQRT(AUTOA)
+              WPS(K) = PAW%tphi(K,I)/SQRT(AUTOA)*PAW%wfrate(I)
            ENDDO
            
            DO K = Grid%n, 1, -1
@@ -1425,7 +1439,7 @@
 !                          WRITE(98,*) 
         !!!!!!   ae  wave-function   !!!!!
            DO K = 1, Grid%n
-              WAE(K) = PAW%phi(K,I)/SQRT(AUTOA)
+              WAE(K) = PAW%phi(K,I)/SQRT(AUTOA)*PAW%wfrate(I)
            ENDDO
            CALL SPLINE(Grid%r*AUTOA, WAE, SPLINE_COEF(1,1:Kcut),  &
      &             SPLINE_COEF(2,1:Kcut), SPLINE_COEF(3,1:Kcut), Kcut)
@@ -1443,6 +1457,8 @@
       ENDDO
 !      STOP
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+       FROM_PP%ZVALF_ORIG = paw%chag_val
+
        SCALE = 2.0*sqrt(PI0)
 
        CALL SET_SIMP(FROM_PP%R)
@@ -1460,11 +1476,11 @@
             CALL SIMPI(FROM_PP%R, TMP, SUM)
             QPAW(CH1,CH2, LMAIN)=SUM
             FROM_PP%QPAW(CH1,CH2, LMAIN)=SUM
+!           WRITE(6,*) 'TEST_QPAW:', FROM_PP%QPAW(CH1,CH2, LMAIN)
          ENDDO
       ENDDO
       ENDDO
 
-!       WRITE(6,*) 'TEST_QPAW:', FROM_PP%QPAW
 
        ALLOCATE(RHOPS00(FROM_PP%R%NMAX), RHOAE00(FROM_PP%R%NMAX))
 
@@ -1520,7 +1536,6 @@
          ENDDO
       ENDDO
 !      CALL SIMPI(PP%R,RHOAE00+PP%RHOAE*SCALE, QTEST)
-!      FROM_PP%ZVALF_ORIG = paw%chag_val
 !      WRITE(6,*) 'QTEST=', QTEST, FROM_PP%ZVALF_ORIG
 
 !!!!!!!!! POTAE = V_H[n_v]+V_XC[n_v+n_c] != POTAEC  !!!!!!!!!     
@@ -1529,7 +1544,8 @@
 !      RHO = 0
 !      CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
 !      CALL RAD_POT(FROM_PP%R, 1, 1, 1, .FALSE., &
-!                   RHO, FROM_PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+!     &            RHO, FROM_PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+!      CALL POP_XC_TYPE
 !      POTAE_TEST(:) = POT(:,1,1)
 !!!!!!!!!!!!!!!!!!!!!!!! POTAEC = V_H[n_Zc] = V_H[n_c]+ Z/r !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       Z=ANINT(FROM_PP%ZVALF_ORIG+QCORE*SCALE)
@@ -1544,14 +1560,15 @@
 !      DO j =1, FROM_PP%R%NMAX
 !         WRITE(95,*) FROM_PP%R%R(j), POTAEC(j)
 !      ENDDO
-      WRITE(6,*) 'THE_NUCLEAR_CHARGE: ',Z
+      WRITE(6,*) !'THE_NUCLEAR_CHARGE: ',Z
 
 !!!!!!!!!!!!!!!!!!!!!!!! POTAE_TEST =  V_H[n_v] +V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!
       POT = 0
       POT_TEST = 0
       CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
       CALL RAD_POT(FROM_PP%R, 1, 1, 1, .FALSE., &
-                   RHO, FROM_PP%RHOAE, POT_TEST, POT, DOUBLEAE, EXCG)
+     &            RHO, FROM_PP%RHOAE, POT_TEST, POT, DOUBLEAE, EXCG)
+      CALL POP_XC_TYPE
       FROM_PP%POTAE(:) = - POT(:,1,1)/SCALE                       !!!    POTAE = V_H[n_v] +V_XC[n_v+n_c] 
 !      POTAE_TEST(:) =  -POT(:,1,1)/SCALE + PP%ZVALF_ORIG/PP%R%R(:)/SCALE/SQRT(2.0)
 !      DO j=1, PP%R%NMAX
@@ -1569,7 +1586,8 @@
       POT = 0
       CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
       CALL RAD_POT(FROM_PP%R, 1, 1, 1, .FALSE., &
-                   RHO, FROM_PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+     &            RHO, FROM_PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
+      CALL POP_XC_TYPE
       POTAE_EFF(:) =  - POT(:,1,1)/SCALE
 
 !!!!!!!!!!!!!!!!!!!!!!!! POTPS_EFF = A*sin(qloc*r)/r !!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1619,11 +1637,12 @@
 !      CALL SIMPI(PP%R,RHOPS00, QTEST)
 !      WRITE(6,*) 'QTEST=', QTEST
       POT = 0
-!      CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
+      CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
       CALL RAD_POT(FROM_PP%R, 1, 1, 1, .FALSE., &
-                   RHO, FROM_PP%RHOPS, POTPSC_TEST, POT, DOUBLEAE, EXCG)
+     &            RHO, FROM_PP%RHOPS, POTPSC_TEST, POT, DOUBLEAE, EXCG)
 !      CALL RAD_POT(PP%R, 1, 1, 1, .FALSE., &
 !                   RHO, PP%RHOPS, PP%POTPSC, POT, DOUBLEAE, EXCG)
+      CALL POP_XC_TYPE
       POTPS_TEST(:) =  POT(:,1,1)/SCALE
 
       DO I = 1, Grid%n

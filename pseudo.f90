@@ -1351,6 +1351,7 @@ CONTAINS
              PAW%eig(nbase)=Orbit%eig(io)
              PAW%occ(nbase)=Orbit%occ(io)
              PAW%phi(:,nbase)=Orbit%wfn(:,io)
+             PAW%wfrate(nbase) = 1.0d0
              PAW%valencemap(io)=nbase
              IF(Orbit%exctype=='HF') then
                PAW%eig(nbase)=HF%lmbd(io,io)
@@ -1404,6 +1405,7 @@ CONTAINS
           endif
           rat=MAX(ABS(PAW%phi(irc,nbase)),ABS(PAW%phi(irc+1,nbase)))
           rat=DSIGN(rat,PAW%phi(irc,nbase))
+          PAW%wfrate(nbase) = rat
           PAW%phi(1:n,nbase)=PAW%phi(1:n,nbase)/rat
           !IF(Orbit%exctype=='HF') PAW%lmbd(:,nbase)=PAW%lmbd(:,nbase)/rat
           WRITE(6,'(3i6,1p,2e15.6)') nbase,PAW%np(nbase),l,             &
@@ -2111,6 +2113,7 @@ CONTAINS
          PAW%tp(i,io)=(PAW%eig(io)-VNC(i)-dble(l*(l+1))/(r(i)**2))*PAW%tphi(i,io)+gg
         enddo
     ! Set normalization for PAW%eig(io)>0
+    WRITE(6,*) ' TEST_VASP_RRKJ'
      ! Find logderiv
 
      !  Find   bessel function zeros
@@ -2124,57 +2127,8 @@ CONTAINS
 !     return
 !
  Selectcase(Orthoindex)
-  Case default !(GRAMSCHMIDTORTHO)  Form orthonormal projectors --  GRAM-SCHMIDT SCHEME
-     write(6,*) 'Gramschmidt ortho'
-     DO l=0,lmax
-        icount=0
-        do io=1,nbase
-           if (PAW%l(io)==l) icount=icount+1
-        enddo
-        if (icount==0) cycle
-        allocate(aa(icount,icount),ai(icount,icount),omap(icount))
-        icount=0
-        DO io=1,nbase
-          IF (PAW%l(io)==l) THEN
-             IF (icount==0) istart=io
-             IF (icount>=0) ifinish=io
-               icount=icount+1;omap(icount)=io
-          ENDIF
-        ENDDO
-     DO ibase=istart,ifinish
-          PAW%otp(:,ibase)=PAW%tp(:,ibase)
-          PAW%otphi(:,ibase)=PAW%tphi(:,ibase)
-          PAW%ophi(:,ibase)=PAW%phi(:,ibase)
-          DO jbase=istart,ibase
-             IF (jbase.LT.ibase) THEN
-             xx=overlap(Grid,PAW%otp(:,jbase),PAW%otphi(:,ibase),1,irc)
-             yy=overlap(Grid,PAW%otphi(:,jbase),PAW%otp(:,ibase),1,irc)
-             PAW%ophi(1:n,ibase)=PAW%ophi(1:n,ibase)-PAW%ophi(1:n,jbase)*xx
-             PAW%Kop(1:n,ibase)=PAW%Kop(1:n,ibase)-PAW%Kop(1:n,jbase)*xx
-             PAW%otphi(1:n,ibase)=PAW%otphi(1:n,ibase)-PAW%otphi(1:n,jbase)*xx
-             PAW%otp(1:n,ibase)=PAW%otp(1:n,ibase)-PAW%otp(1:n,jbase)*yy
-             aa(ibase-istart+1,jbase-istart+1)=xx
-             aa(jbase-istart+1,ibase-istart+1)=xx
-             ELSE IF (jbase.EQ.ibase) THEN
-                   xx=overlap(Grid,PAW%otp(:,jbase),PAW%otphi(:,ibase),1,irc)
-                   !choice=1.d0/SQRT(ABS(xx))
-                   !PAW%otp(1:n,ibase)=PAW%otp(1:n,ibase)*DSIGN(choice,xx)
-                   !PAW%otphi(1:n,ibase)=PAW%otphi(1:n,ibase)*choice
-                   !PAW%ophi(1:n,ibase)=PAW%ophi(1:n,ibase)*choice
-                   !PAW%Kop(1:n,ibase)=PAW%Kop(1:n,ibase)*choice
-                   PAW%otp(1:n,ibase)=PAW%otp(1:n,ibase)/xx
-                   aa(ibase-istart+1,ibase-istart+1)=xx
-             ENDIF
-          ENDDO
-       ENDDO
-       ai=aa;
-       do i=1,icount
-        io=omap(i);PAW%ck(io)=ai(i,i)
-       enddo
-       deallocate(aa,ai,omap)
-     ENDDO
-
-   Case (VANDERBILTORTHO)     ! Orthoindex=VANDERBILTORTHO
+  Case default 
+!   Case (VANDERBILTORTHO)     ! Orthoindex=VANDERBILTORTHO
   !! Form orthogonalized projectors --   VANDERBILTORTHO
      write(6,*) ' Vanderbilt ortho'
      do l=0,lmax
@@ -2227,6 +2181,56 @@ CONTAINS
        enddo
        deallocate(aa,ai,omap)
     enddo
+
+   Case (GRAMSCHMIDTORTHO)  ! Form orthonormal projectors --  GRAM-SCHMIDT SCHEME
+     write(6,*) 'Gramschmidt ortho'
+     DO l=0,lmax
+        icount=0
+        do io=1,nbase
+           if (PAW%l(io)==l) icount=icount+1
+        enddo
+        if (icount==0) cycle
+        allocate(aa(icount,icount),ai(icount,icount),omap(icount))
+        icount=0
+        DO io=1,nbase
+          IF (PAW%l(io)==l) THEN
+             IF (icount==0) istart=io
+             IF (icount>=0) ifinish=io
+               icount=icount+1;omap(icount)=io
+          ENDIF
+        ENDDO
+     DO ibase=istart,ifinish
+          PAW%otp(:,ibase)=PAW%tp(:,ibase)
+          PAW%otphi(:,ibase)=PAW%tphi(:,ibase)
+          PAW%ophi(:,ibase)=PAW%phi(:,ibase)
+          DO jbase=istart,ibase
+             IF (jbase.LT.ibase) THEN
+             xx=overlap(Grid,PAW%otp(:,jbase),PAW%otphi(:,ibase),1,irc)
+             yy=overlap(Grid,PAW%otphi(:,jbase),PAW%otp(:,ibase),1,irc)
+             PAW%ophi(1:n,ibase)=PAW%ophi(1:n,ibase)-PAW%ophi(1:n,jbase)*xx
+             PAW%Kop(1:n,ibase)=PAW%Kop(1:n,ibase)-PAW%Kop(1:n,jbase)*xx
+             PAW%otphi(1:n,ibase)=PAW%otphi(1:n,ibase)-PAW%otphi(1:n,jbase)*xx
+             PAW%otp(1:n,ibase)=PAW%otp(1:n,ibase)-PAW%otp(1:n,jbase)*yy
+             aa(ibase-istart+1,jbase-istart+1)=xx
+             aa(jbase-istart+1,ibase-istart+1)=xx
+             ELSE IF (jbase.EQ.ibase) THEN
+                   xx=overlap(Grid,PAW%otp(:,jbase),PAW%otphi(:,ibase),1,irc)
+                   !choice=1.d0/SQRT(ABS(xx))
+                   !PAW%otp(1:n,ibase)=PAW%otp(1:n,ibase)*DSIGN(choice,xx)
+                   !PAW%otphi(1:n,ibase)=PAW%otphi(1:n,ibase)*choice
+                   !PAW%ophi(1:n,ibase)=PAW%ophi(1:n,ibase)*choice
+                   !PAW%Kop(1:n,ibase)=PAW%Kop(1:n,ibase)*choice
+                   PAW%otp(1:n,ibase)=PAW%otp(1:n,ibase)/xx
+                   aa(ibase-istart+1,ibase-istart+1)=xx
+             ENDIF
+          ENDDO
+       ENDDO
+       ai=aa;
+       do i=1,icount
+        io=omap(i);PAW%ck(io)=ai(i,i)
+       enddo
+       deallocate(aa,ai,omap)
+     ENDDO
 
   End Select
   

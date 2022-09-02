@@ -42,6 +42,7 @@ MODULE pseudodata
      REAL(8), POINTER :: DRCC(:,:,:,:),DRCjkl(:,:,:,:,:),mLcc(:,:,:),Dcj(:,:)
      REAL(8) :: coretol
      REAL(8) :: chag_val
+     REAL(8), POINTER :: wfrate(:)
   END  TYPE Pseudoinfo
 
   CONTAINS
@@ -81,7 +82,7 @@ MODULE pseudodata
 &        PAW%ophi(n,mxbase),PAW%otphi(n,mxbase),PAW%otp(n,mxbase),&
 &        PAW%np(mxbase),PAW%l(mxbase),PAW%eig(mxbase),PAW%occ(mxbase),&
 &        PAW%ck(mxbase),PAW%vrc(mxbase),PAW%Kop(n,mxbase),PAW%rng(mxbase),&
-&        PAW%rcio(mxbase),PAW%nodes(mxbase),stat=ok)
+&        PAW%rcio(mxbase),PAW%nodes(mxbase),PAW%wfrate(mxbase),stat=ok)
       IF (ok/=0) STOP 'Allocation error 2 in InitPAW'
       PAW%phi=0.d0;PAW%tphi=0.d0;PAW%tp=0.d0
       PAW%ophi=0.d0;PAW%otphi=0.d0;PAW%otp=0.d0
