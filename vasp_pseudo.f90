@@ -168,7 +168,7 @@
       ALLOCATE(POTPS_G(NPSPTS), CORPS_G(NPSPTS), RHOPS_G(NPSPTS))
       ALLOCATE(POTPS_TEST(PP%R%NMAX))
 !      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
-      ALLOCATE(CRHODE(LDIM,LDIM))
+      ALLOCATE(CRHODE(LMDIM,LMDIM))
 !      ALLOCATE(CRHODE(LDIM,LDIM), POT-AE(PP%R%NMAX))
       ALLOCATE(RHOLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
 !      ALLOCATE(DLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
@@ -848,12 +848,12 @@
         CALL Report_Pseudopotential(Grid,PAW)
         CALL SPMatrixElements(Grid,FCPot,FC,PAW)
 
-        CALL GENERATE_POTCARLIB(INFO, PP)
+        CALL GENERATE_POTCARLIB(INFO, PP, CHANNELS)
 
         CALL GENERATE_POTCARDATA (INFO, PP, CHANNELS, Grid, FC%coreden, PAW, PotPS)
 
         WRITE(6, 300)
-        CALL WRITE_POTCAR(INFO, PP)
+        CALL WRITE_POTCAR(INFO, PP, CHANNELS)
 
 300     FORMAT(' !!! ----  GENERATE POTCAR  ---- !!! ',/)
 
@@ -1506,7 +1506,7 @@
       ALLOCATE(POTPS_G(NPSPTS), CORPS_G(NPSPTS), RHOPS_G(NPSPTS))
       ALLOCATE(POTPS_TEST(FROM_PP%R%NMAX))
 !      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
-      ALLOCATE(CRHODE(LDIM,LDIM))
+      ALLOCATE(CRHODE(LMDIM,LMDIM))
 !      ALLOCATE(CRHODE(LDIM,LDIM), POT-AE(PP%R%NMAX))
       ALLOCATE(RHOLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
 !      ALLOCATE(DLM(SIZE(CRHODE,1)*SIZE(CRHODE,1)))
@@ -1560,7 +1560,7 @@
       DO j =1, FROM_PP%R%NMAX
          WRITE(95,*) FROM_PP%R%R(j), POTAEC(j)
       ENDDO
-      WRITE(6,*) !'THE_NUCLEAR_CHARGE: ',Z
+!      WRITE(6,*) !'THE_NUCLEAR_CHARGE: ',Z
 
 !!!!!!!!!!!!!!!!!!!!!!!! POTAE_TEST =  V_H[n_v] +V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!
       POT = 0
@@ -1635,7 +1635,7 @@
          ENDDO
       ENDDO
 !      CALL SIMPI(PP%R,RHOPS00, QTEST)
-!      WRITE(6,*) 'QTEST=', QTEST
+      WRITE(6,*) 'CHECK_POTCAR_DATA_GENERATE'
       POT = 0
       CALL PUSH_XC_TYPE(FROM_PP%LEXCH, 1.0_q, 1.0_q, 1.0_q, 1.0_q, 0.0_q)
       CALL RAD_POT(FROM_PP%R, 1, 1, 1, .FALSE., &
@@ -1883,7 +1883,7 @@
 
        END SUBROUTINE GENERATE_POTCARDATA
 
-      SUBROUTINE GENERATE_POTCARLIB (INFO, FROM_PP)
+      SUBROUTINE GENERATE_POTCARLIB (INFO, FROM_PP, CHANNELS)
 !         TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
          TYPE(potcar), POINTER :: FROM_PP
          TYPE(INFO_STRUCT) :: INFO
@@ -1895,7 +1895,7 @@
       REAL(q)  ::   POTCAR_PARAM
       REAL(q)  ::   POTCAR_G_PARAM, POTCAR_R_PARAM
 !      REAL(q)  ::   WAE(Grid%n,PAW%nbase), WPS(Grid%n,PAW%nbase)
-      INTEGER  ::   LSTATE, NWRITE, XC_TYPE, L1, L2, NMAX, NRANGE
+      INTEGER  ::   LSTATE, NWRITE, XC_TYPE, L1, L2, NMAX, CHANNELS
       REAL(q), ALLOCATABLE :: POTCAR_DATA(:), VASP_PSNL_CHECK(:), VASP_PSRNL_CHECK(:), VASP_PROJ_R(:)
       REAL(q), ALLOCATABLE :: SPLINE_COEF(:,:), SPLINE_VALUE(:), SPLINE_DATA(:)
       LOGICAL  ::   PARAM_LOG
@@ -1924,31 +1924,39 @@
 !      READ(30,*) 
 !      WRITE(88,*) FROM_PP%ZVALF
 !!!!!   HEAD, ELEMENT & PSCTR PARAMETER   !!!!!
-      DO I=1,26
-        READ(30,'(A80)') CSEL
-!        WRITE(88,'(A80)') CSEL
-        WRITE(89,'(A80)') CSEL
-      ENDDO
-      
-      READ(30, '(4X, I1,A8)') LSTATE, CSEL
-      WRITE(89, '(4X, I1,A8)') LSTATE, CSEL
-      DO I=1, LSTATE+1
-        READ(30,'(A80)') CSEL
-!        WRITE(88,'(A80)') CSEL
-        WRITE(89,'(A80)') CSEL
-      ENDDO
+!      DO I=1,26
+!        READ(30,'(A80)') CSEL
+!!        WRITE(88,'(A80)') CSEL
+!        WRITE(89,'(A80)') CSEL
+!      ENDDO
+!      
+!      READ(30, '(4X, I1,A8)') LSTATE, CSEL
+!      WRITE(89, '(4X, I1,A8)') LSTATE, CSEL
+!      DO I=1, LSTATE+1
+!        READ(30,'(A80)') CSEL
+!!        WRITE(88,'(A80)') CSEL
+!        WRITE(89,'(A80)') CSEL
+!      ENDDO
 
-      DO I=1,7
-        READ(30,'(A80)') CSEL
-!        WRITE(88,'(A80)') CSEL
-        WRITE(89,'(A80)') CSEL
-      ENDDO
+!      DO I=1, 8
+!        READ(30,'(A80)') CSEL
+!!        WRITE(88,'(A80)') CSEL
+!        WRITE(89,'(A80)') CSEL
+!      ENDDO
+200   READ(30,'(A80)') CSEL
+      IF (CSEL(1:32) .EQ. 'END of PSCTR-controll parameters') THEN
+         GOTO 305
+      ELSE
+         WRITE(89,'(A80)') CSEL
+         GOTO 200
+      ENDIF
+305      WRITE(89, '(A80)') CSEL
 
-      DO I=1,18
+!      DO I=1,18
         READ(30,'(A80)') CSEL
-!        WRITE(88,'(A80)') CSEL
+!!        WRITE(88,'(A80)') CSEL
         WRITE(89,'(A80)') CSEL
-      ENDDO
+!      ENDDO
       
 !!!!!   LOCAL PART POTENTIAL   !!!!!
       READ(30,*) POTCAR_PARAM
@@ -2106,15 +2114,14 @@
 !      WRITE(88,*)'(5E20.12)' 
       WRITE(89,'(A9,32X)')'(5E20.12)' 
 
-      NRANGE = (PAW%l(PAW%nbase)+1)**4
       DO I =1, 2
 !!!!!   augmentation charge (non spherical)   !!!!!
          READ(30,'(A80)') CSEL
 !         WRITE(88,'(A80)') CSEL
          WRITE(89,'(A80)') CSEL
-         READ(30,*) (POTCAR_DATA (J),J=1,NRANGE)
+         READ(30,*) (POTCAR_DATA (J),J=1,CHANNELS*CHANNELS)
 !         WRITE(88,'(5E20.12)') (POTCAR_DATA (J),J=1,NRANGE)
-         WRITE(89,'(5E20.12)') (POTCAR_DATA (J),J=1,NRANGE)
+         WRITE(89,'(5E20.12)') (POTCAR_DATA (J),J=1,CHANNELS*CHANNELS)
       ENDDO
 !!!!!            grid              !!!!!
       READ(30,'(A80)') CSEL
@@ -2272,7 +2279,7 @@
        END SUBROUTINE GENERATE_POTCARLIB
 
 
-      SUBROUTINE WRITE_POTCAR (INFO, FROM_PP)
+      SUBROUTINE WRITE_POTCAR (INFO, FROM_PP, CHANNELS)
 !         TYPE(potcar), TARGET, ALLOCATABLE :: P(:)
          TYPE(potcar), POINTER :: FROM_PP
          TYPE(INFO_STRUCT) :: INFO
@@ -2284,7 +2291,7 @@
       REAL(q)  ::   POTCAR_G_PARAM, POTCAR_R_PARAM
 !      REAL(q)  ::   WAE(Grid%n,PAW%nbase), WPS(Grid%n,PAW%nbase)
 !      REAL(q)  ::   WAE(Grid%n), WPS(Grid%n)
-      INTEGER  ::   LSTATE, NWRITE, XC_TYPE, L1, L2, NMAX, NRANGE
+      INTEGER  ::   LSTATE, NWRITE, XC_TYPE, L1, L2, NMAX, CHANNELS
       REAL(q), ALLOCATABLE :: POTCAR_DATA(:)
 !      REAL(q), ALLOCATABLE :: SPLINE_COEF(:,:), SPLINE_VALUE(:), SPLINE_DATA(:)
       LOGICAL  ::   PARAM_LOG
@@ -2310,31 +2317,39 @@
 !      READ(389*) 
 !      WRITE(88,*) FROM_PP%ZVALF
 !!!!!   HEAD, ELEMENT & PSCTR PARAMETER   !!!!!
-      DO I=1,26
-        READ(89,'(A80)') CSEL
+!      DO I=1,26
+!        READ(89,'(A80)') CSEL
+!!        WRITE(88,'(A80)') CSEL
 !        WRITE(88,'(A80)') CSEL
-        WRITE(88,'(A80)') CSEL
-      ENDDO
-      
-      READ(89, '(4X, I1,A8)') LSTATE, CSEL
-      WRITE(88, '(4X, I1,A8)') LSTATE, CSEL
-      DO I=1, LSTATE+1
-        READ(89,'(A80)') CSEL
+!      ENDDO
+!      
+!      READ(89, '(4X, I1,A8)') LSTATE, CSEL
+!      WRITE(88, '(4X, I1,A8)') LSTATE, CSEL
+!      DO I=1, LSTATE+1
+!        READ(89,'(A80)') CSEL
+!!        WRITE(88,'(A80)') CSEL
 !        WRITE(88,'(A80)') CSEL
-        WRITE(88,'(A80)') CSEL
-      ENDDO
+!      ENDDO
 
-      DO I=1,7
-        READ(89,'(A80)') CSEL
+!      DO I=1,8
+!        READ(89,'(A80)') CSEL
 !        WRITE(88,'(A80)') CSEL
-        WRITE(88,'(A80)') CSEL
-      ENDDO
+!        WRITE(88,'(A80)') CSEL
+!      ENDDO
+200   READ(89,'(A80)') CSEL
+      IF (CSEL(1:32) .EQ. 'END of PSCTR-controll parameters') THEN
+         GOTO 304
+      ELSE
+         WRITE(88,'(A80)') CSEL
+         GOTO 200
+      ENDIF
+304      WRITE(88, '(A80)') CSEL
 
-      DO I=1,18
+!      DO I=1,18
         READ(89,'(A80)') CSEL
 !        WRITE(88,'(A80)') CSEL
         WRITE(88,'(A80)') CSEL
-      ENDDO
+!      ENDDO
       
 !!!!!   LOCAL PART POTENTIAL   !!!!!
       READ(89,*) POTCAR_PARAM
@@ -2454,17 +2469,22 @@
       READ(89,*) 
       WRITE(88,'(A9,32X)')'(5E20.12)' 
 
-      NRANGE = (PAW%l(PAW%nbase)+1)**4
+      DO I =1, 2
+!      NRANGE = (PAW%l(PAW%nbase)+1)**4
 !!!!!   augmentation charge (non spherical)   !!!!!
-      READ(89,'(A80)') CSEL
-      WRITE(88,'(A80)') CSEL
-      READ(89,*) (POTCAR_DATA (J),J=1,NRANGE)
-      WRITE(88,'(5E20.12)') ((FROM_PP%QPAW (I,J,0),J=1, PAW%nbase),I=1, PAW%nbase)
+       READ(89,'(A80)') CSEL
+       WRITE(88,'(A80)') CSEL
+       WRITE(6,*) 'CSEL=', CSEL
+       READ(89,*) (POTCAR_DATA (J),J=1,CHANNELS*CHANNELS)
+       WRITE(6,*) 'CHANNELS=', CHANNELS
+       WRITE(6,*) 'TEST=', (POTCAR_DATA (J),J=1,CHANNELS*CHANNELS) 
+       WRITE(88,'(5E20.12)') (POTCAR_DATA (J),J=1,CHANNELS*CHANNELS)
 !!!!!   uccopancies in atom   !!!!!
-      READ(89,'(A80)') CSEL
-      WRITE(88,'(A80)') CSEL
-      READ(89,*) (POTCAR_DATA (J),J=1,NRANGE)
-      WRITE(88,'(5E20.12)') (POTCAR_DATA (J),J=1,NRANGE)
+!      READ(89,'(A80)') CSEL
+!      WRITE(88,'(A80)') CSEL
+!      READ(89,*) (POTCAR_DATA (J),J=1,CHANNELS*CHANNELS)
+!      WRITE(88,'(5E20.12)') (POTCAR_DATA (J),J=1, CHANNELS*CHANNELS)
+      ENDDO
 !!!!!            grid              !!!!!
       READ(89,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
