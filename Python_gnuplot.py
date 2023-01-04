@@ -1,14 +1,15 @@
-#!/usr/bin/env python   
+#!/home/jun_jiang/.local/bin/python
 #!coding = utf-8
 import os
 import time
 
 # g = PyGnuplot.Gnuplot()   
 
-import PyGnuplot as gp 
+#import PyGnuplot as gp 
+from PyGnuplot import gp 
 import numpy as np 
 
-# X=np.arange(10)
+# X=np.crange(10)
 # Y=np.sin(X/(2*np.pi))
 # Z=Y**2.0
 
@@ -71,18 +72,21 @@ def Data_Fig(Properties, type, data, name):
 #    print(plot_command_VASP)
 #    exit ()
     Fig_title = "set title "+ '"' + data +'"'
-    Fig_name = type+"_"+name+".eps"
+#    Fig_name = type+"_"+name+".eps"
+    Fig_name = type+"_"+name+".ps"
 
-    gp.c(Fig_title)
+    Fig = gp()
+    Fig.c(Fig_title)
     if (Properties == "wavefunction"):
-       gp.c('set xrange[0:1.5]')
-       gp.c('set yrange[-1.5:1.5]')
+       Fig.c('set xrange[0:1.5]')
+       Fig.c('set yrange[-1.5:1.5]')
 
-    gp.c("plot "+ plot_command1 + plot_command2)
+    Fig.c("plot "+ plot_command1 + plot_command2)
     # gp.c('plot "VASP_WAE" u 1:2 w p pt 3 ps 2 title "VASP-AE"')
     # gp.c(plot_command_ATOM)
     # gp.p('myfigure.ps')
-    gp.p(Fig_name)
+#    Fig.ps(Fig_name)
+    Fig.ps(Fig_name)
 
 def Data_compare_Fig(Properties, data, name):
     TYPE1 = "VASP-"+data
@@ -94,32 +98,35 @@ def Data_compare_Fig(Properties, data, name):
 #    print(plot_command_VASP)
 #    exit ()
     Fig_title = "set title "+ '"' + name +'"'
-    Fig_name = name+".eps"
+#    Fig_name = name+".eps"
+    Fig_name = name+".ps"
 
-    gp.c(Fig_title)
-    gp.c('set xrange[0:3.0]')
+    Fig = gp()
+    Fig.c(Fig_title)
+    Fig.c('set xrange[0:3.0]')
     if (Properties == "waefunction"):
-       gp.c('set yrange[-1:1.5]')
+       Fig.c('set yrange[-1:1.5]')
     elif (Properties == "wpsfunction"):
-       gp.c('set yrange[-0.5:1.5]')
+       Fig.c('set yrange[-0.5:1.5]')
     elif (Properties == "density" and data == "PCORE"):
-       gp.c('set yrange[0:1]')
+       Fig.c('set yrange[0:1]')
     elif (Properties == "density" and data == "CORE"):
-       gp.c('set yrange[0:9]')
+       Fig.c('set yrange[0:9]')
     elif (Properties == "potential" and data == "POTAE"):
-       gp.c('set yrange[-50: 5000]')
+       Fig.c('set yrange[-50: 5000]')
     elif (Properties == "potential" and data == "POTPS"):
-       gp.c('set yrange[-50:20]')
+       Fig.c('set yrange[-50:20]')
     elif (Properties == "potential" and data == "POTPSC"):
-       gp.c('set yrange[-500:100]')
+       Fig.c('set yrange[-500:100]')
     else:
 #       gp.c('set yrange[-50:250]')
-       gp.c('set yrange[0:4]')
-    gp.c("plot" + plot_command_VASP + plot_command_ATOM)
+       Fig.c('set yrange[0:4]')
+    Fig.c("plot" + plot_command_VASP + plot_command_ATOM)
     # gp.c('plot "VASP_WAE" u 1:2 w p pt 3 ps 2 title "VASP-AE"')
     # gp.c(plot_command_ATOM)
     # gp.p('myfigure.ps')
-    gp.p(Fig_name)
+    Fig.ps(Fig_name)
+#    Fig.pdf(Fig_name)
 
 def Data_compare_Fig2(Properties, data, name):
     TYPE1 = "VASP-"+data
@@ -132,37 +139,40 @@ def Data_compare_Fig2(Properties, data, name):
 #    print(plot_command_VASP)
 #    exit ()
     Fig_title = "set title "+ '"' + name +'"'
-    Fig_name = name+".eps"
+#    Fig_name = name+".eps"
+    Fig_name = name+".ps"
+    Fig = gp()
 
-    gp.c(Fig_title)
-    gp.c('set xrange[0:3.0]')
+    Fig.c(Fig_title)
+    Fig.c('set xrange[0:3.0]')
     if (Properties == "waefunction"):
-       gp.c('set yrange[-1:1.5]')
+       Fig.c('set yrange[-1:1.5]')
     elif (Properties == "wpsfunction"):
-       gp.c('set yrange[-0.5:1.5]')
+       Fig.c('set yrange[-0.5:1.5]')
     elif (Properties == "density" and data == "PCORE"):
-       gp.c('set yrange[0:1]')
+       Fig.c('set yrange[0:1]')
     elif (Properties == "density" and data == "CORE"):
-       gp.c('set yrange[0:9]')
+       Fig.c('set yrange[0:9]')
     elif (Properties == "potential" and data == "POTAE"):
-       gp.c('set yrange[-50: 100]')
+       Fig.c('set yrange[-50: 100]')
     elif (Properties == "potential" and data == "POTPS"):
-       gp.c('set yrange[-50: 20]')
+       Fig.c('set yrange[-50: 20]')
 #    elif (Properties == "potential" and data1 == "POTAE" and data2 == "POTPS"):
 #       gp.c('set yrange[-50: 100]')
 #    elif (Properties == "potential" and data1 == "POTAEC" and data2 == "POTPSC"):
 #       gp.c('set yrange[-500: 50]')
     else:
 #       gp.c('set yrange[-50:250]')
-       gp.c('set yrange[0:4]')
-    gp.c("plot" + plot_command1+plot_command2+plot_command3)
+       Fig.c('set yrange[0:4]')
+    Fig.c("plot" + plot_command1+plot_command2+plot_command3)
     # gp.c('plot "VASP_WAE" u 1:2 w p pt 3 ps 2 title "VASP-AE"')
     # gp.c(plot_command_ATOM)
     # gp.p('myfigure.ps')
-    gp.p(Fig_name)
+    Fig.ps(Fig_name)
+#    Fig.pdf(Fig_name)
 
 def main():
-    Write_Atom_in('C', 6)
+    Write_Atom_in('Si', 14)
 
     os.system("~/Softs/atompaw_test/src/atompaw < in > out")
     #exit ()
@@ -181,6 +191,7 @@ def main():
     Data_compare_Fig("potential", "POTPSC", "POTPSC-data")
 
 #    Data_compare_Fig2("potential",  "POTAE", "POTPSC", "VASP")
+    os.system("evince *-data.ps")
 
 if __name__ == '__main__':
     main()
