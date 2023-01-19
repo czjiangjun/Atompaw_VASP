@@ -180,7 +180,7 @@
 !         GAUSSIAN(j) = exp(-PP%R%R(j)**2/PP%R%R(1)**2/10000)
 !         WRITE(6,*) 'GAUSSIAN=', GAUSSIAN(j)
 !      ENDDO 
-! CRHODE is n_ij (n_occ)    # 价电子轨道的占据数
+! CRHODE is n_ij (n_occ)    # 价电子轨道的占据数 考虑 lm,l'm'
       CALL SET_CRHODE_ATOM(CRHODE,PP)
 ! RHOLM is f_LM            #  价电子占据数构造 f_LM
       CALL TRANS_RHOLM(CRHODE, RHOLM, PP)
@@ -220,7 +220,7 @@
 !         POTAEC(j) =   POTAEC(j)/SCALE - (Z-PP%ZVALF_ORIG)/PP%R%R(j)*FELECT  !!!   V_H[n_Zc] =  V_H[n_c] - Z/r 
       ENDDO
 !      DO j =1, PP%R%NMAX
-!         WRITE(6,*) POTAEC(j)
+!         WRITE(91,*) PP%R%R(j), POTAEC(j)
 !      ENDDO
 !      WRITE(6,*)
 
@@ -232,6 +232,15 @@
      &            RHO, PP%RHOAE, POT_TEST, POT, DOUBLEAE, EXCG)
       CALL POP_XC_TYPE
       POTAE_TEST(:) =  POT(:,1,1)/SCALE                       !!!    POTAE = V_H[n_v] +V_XC[n_v+n_c] 
+
+!      DO i =1,CHANNELS
+!         LI = PP%LPS(i)
+!         DO MI = 1, 2*LI+1
+!            LMI = LI*LI + MI
+!            POTAE_EFF(:) =  POTAE_EFF(:) + POT(:,LMI,1)
+!        ENDDO
+!      ENDDO
+
 !      POTAE_TEST(:) =  -POT(:,1,1)/SCALE + PP%ZVALF_ORIG/PP%R%R(:)/SCALE/SQRT(2.0)
 !      DO j=1, PP%R%NMAX
 !         POTAE_TEST(j) = - POT(j,1,1)/SCALE + FELECT*Z*(1.0-ERRF(PP%R%R(j)/2.0/AUTOA))/PP%R%R(j)
@@ -291,7 +300,7 @@
       POTPSC_CHECK = 0
       POT_TEST = 0
 !!!!!!!!!!!!!  POTPS = V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c]  !!!!!!!!!!!!!!!!!!!!!!!!
-! RHO is \tilde RHO + \hat n
+! RHO is \tilde RHO_v + \hat n
       CALL RAD_CHARGE(RHO(:,:,1), PP%R, RHOLM(:),PP%LMAX, PP%LPS, PP%WPS)
       CALL RAD_AUG_CHARGE(  RHO(:,:,1), PP%R, RHOLM, PP%LMAX, PP%LPS,  &
               LYMAX, PP%AUG, PP%QPAW )
@@ -330,12 +339,12 @@
 !!!!!!!!!!!!!  Method_1:   POTPSC = POTPS_EFF - (V_H[tn_v+tn_aug]+V_XC[tn_v+tn_aug+tn_c])  !!!!!!!!!!!!!!!!!!!!!!!!
       POTPSC_TEST(:) =  - POTPS_EFF(:) - POTPS_TEST(:)
 !      DO j=1, PP%R%NMAX
-!         WRITE(94,'(6f20.8)') PP%R%R(j), POTPSC_TEST(j)
+!         WRITE(94,'(6f20.8)') PP%R%R(j), PP%POTPSC(j), POTPSC_TEST(j)
 !      ENDDO
 
 !!!!!!!!!!!!   Method_2:   POTPSC = A*sin(qloc*r)/r FROM POTAEC DIRACTLY     !!!!!!!!!!!!!!!!!!!!!!!!
       DO j = 1, PP%R%NMAX
-         POTPSC_TEST(j) = POTAEC(j)
+         POTPSC_CHECK(j) = POTAEC(j)
       ENDDO
       CALL GRAD(PP%R, POTAEC, DPOTAE_EFF)
 
@@ -354,17 +363,22 @@
 !      WRITE(6,*) 'alpha=' , alpha
       DO j = 1, PP%R%NMAX-IMESH
          QR = Qloc*PP%R%R(j)
-         POTPSC_TEST(j) = alpha*sin(QR)/PP%R%R(j)
+         POTPSC_CHECK(j) = alpha*sin(QR)/PP%R%R(j)
 !         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
 !         WRITE(6,'(5f20.8)') PP%R%R(j), PP%POTPSC(j), POTPS_EFF(j), PP%POTAE(j), PP%POTPS(j)
       ENDDO
+!      DO j = 1, PP%R%NMAX
+!         WRITE(91,*) PP%R%R(j), POTPSC_TEST(j), POTPSC_CHECK(j)
+!         WRITE(6,'(5f20.8)') PP%R%R(j), PP%POTPSC(j), POTPS_EFF(j), PP%POTAE(j), PP%POTPS(j)
+!      ENDDO
+
 
 
       OPEN(UNIT=21,FILE='VASP_POTPSC',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
          OPEN(UNIT=21,FILE='VASP_POTPSC',STATUS='OLD')
       ENDIF
-      PP%POTPSC(:) = POTPSC_TEST(:)
+!      PP%POTPSC(:) = POTPSC_TEST(:)
 
 !   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POTPS !!!!!  ----------------------    !     
 
@@ -392,7 +406,7 @@
          WRITE(IU19,'(6f20.8)') PP%PSP(j,1), PP%PSP(j,2), POTPS_G(j), PP%PSPCOR(j),  &
      &                          PP%PSPRHO(j), PP%PSPTAU(j)
       ENDDO
-      PP%PSP(:,2) = POTPS_G(:)
+!      PP%PSP(:,2) = POTPS_G(:)
 !   ---------------- !!!!!! FOR CHECK !!!!! -------------------
       
       POTPSC_CHECK(:) = 0.0
@@ -560,6 +574,7 @@
 !             WRITE(IU19,*)
 !             WRITE(IU19,*) PP%PSDMAX
 !             WRITE(IU19,*)
+!      STOP
 
 !!!! -------------- UNIT IN VASP     E: Hartree   r: Angstrom ------------------ !!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -637,6 +652,8 @@
           ENDDO
 
 !!!!!!!!! tcore_den = sum_i B_i*sin(q_i r)/r !!!!!!!!!!!!!!!!!     
+!         Grid%r(:)=Grid%r(:)*AUTOA
+!         FC%coreden(:)=FC%coreden(:)/(SCALE*AUTOA)
          Call setcoretail2(Grid, FC%coreden)
          OPEN(UNIT=16,FILE='ATOM_PCORE',STATUS='UNKNOWN',IOSTAT=IERR)
          IF (IERR/=0) THEN
@@ -645,11 +662,13 @@
 !!!   FC%tcore = \tilde{n}(r)*r^2  ==> consider the UNIT_EXCHANGE
 !!!   PP%RHOPS = AUTOAE * FC%tcore/(SCALE *AUTOA*AUTOA)
          DO j=1,Grid%n 
-            WRITE(IU12,'(6f20.8)') Grid%r(j)*AUTOA, PAW%tcore(j)*AUTOA
+            WRITE(IU12,'(6f20.8)') Grid%r(j)*AUTOA, PAW%tcore(j)/(SCALE*AUTOA)
          ENDDO
 !            irc_core= FindGridIndex(Grid, PAW%rc_core)
 !            Q_00 = integrator(Grid, PAW%tcore, 1, irc_core) 
 !           write(6,*) 'Q_00 for atom ', irc, Q_00
+!         Grid%r(:)=Grid%r(:)/AUTOA
+!         FC%coreden(:) = FC%coreden(:)*(SCALE*AUTOA)
 !
          Call SetPAWOptions2(ifinput,ifen,Grid, Orbit,Pot_FC,success)
 
@@ -1517,11 +1536,11 @@
 !         GAUSSIAN(j) = exp(-PP%R%R(j)**2/PP%R%R(1)**2/10000)
 !         WRITE(6,*) 'GAUSSIAN=', GAUSSIAN(j)
 !      ENDDO 
-! CRHODE is n_ij (n_occ)    # 价电子轨道的占据数
+! CRHODE is n_ij (n_occ)    # 价电子轨道的占据数(展开) n_lm,l'm'
       CALL SET_CRHODE_ATOM(CRHODE,FROM_PP)
 ! RHOLM is f_LM            #  价电子占据数构造 f_LM
       CALL TRANS_RHOLM(CRHODE, RHOLM, FROM_PP)
-! RHO is density of valence # 价电子密度 n_lm^v = f_LM\langle\ps_i|\psi_j\rangle
+! RHO is density of valence # 价电子密度 n_lm^v = f_LM\langle\psi_i|\psi_j\rangle
       RHO = 0
       CALL RAD_CHARGE(RHO(:,:,1), FROM_PP%R, RHOLM(:), FROM_PP%LMAX, FROM_PP%LPS, FROM_PP%WAE)
       RHOAE00 = 0
@@ -1557,9 +1576,9 @@
          POTAEC(j) =   POTAEC(j)/SCALE - Z/FROM_PP%R%R(j)*FELECT  !!!   V_H[n_Zc] =  V_H[n_c] - Z/r 
 !         POTAEC(j) =   POTAEC(j)/SCALE - (Z-PP%ZVALF_ORIG)/PP%R%R(j)*FELECT  !!!   V_H[n_Zc] =  V_H[n_c] - Z/r 
       ENDDO
-      DO j =1, FROM_PP%R%NMAX
-         WRITE(95,*) FROM_PP%R%R(j), POTAEC(j)
-      ENDDO
+!      DO j =1, FROM_PP%R%NMAX
+!         WRITE(95,*) FROM_PP%R%R(j), POTAEC(j)
+!      ENDDO
 !      WRITE(6,*) !'THE_NUCLEAR_CHARGE: ',Z
 
 !!!!!!!!!!!!!!!!!!!!!!!! POTAE_TEST =  V_H[n_v] +V_XC[n_v+n_c] !!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1589,6 +1608,13 @@
      &            RHO, FROM_PP%RHOAE, POTAEC, POT, DOUBLEAE, EXCG)
       CALL POP_XC_TYPE
       POTAE_EFF(:) =  - POT(:,1,1)/SCALE
+!      DO i =1,CHANNELS
+!         LI = FROM_PP%LPS(i)
+!         DO MI = 1, 2*LI+1
+!            LMI = LI*LI + MI
+!            POTAE_EFF(:) =  POTAE_EFF(:) - POT(:,LMI,1)
+!        ENDDO
+!      ENDDO
 
 !!!!!!!!!!!!!!!!!!!!!!!! POTPS_EFF = A*sin(qloc*r)/r !!!!!!!!!!!!!!!!!!!!!!!!!!!
       DO j = 1, FROM_PP%R%NMAX
@@ -1668,33 +1694,33 @@
 !      ENDDO
 !      STOP
 !!!!!!!!!!!!   Method_2:   POTPSC = A*sin(qloc*r)/r FROM POTAEC DIRACTLY     !!!!!!!!!!!!!!!!!!!!!!!!
-!      DO j = 1, FROM_PP%R%NMAX
-!         POTPSC_TEST(j) = POTAEC(j)
-!      ENDDO
-!      CALL GRAD(FROM_PP%R, POTAEC, DPOTAE_EFF)
-!
-!      IMESH = 40
-!!      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
-!      alpha = 1.0-DPOTAE_EFF(FROM_PP%R%NMAX-IMESH)/POTAEC(FROM_PP%R%NMAX-IMESH)
-!!      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
-!      beta = 1.0
-!
-!      CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
-!!      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
-!!      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
-!      QR = ROOT(1); Qloc = QR/FROM_PP%R%R(FROM_PP%R%NMAX-IMESH)
-!!      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
-!      alpha = POTAEC(FROM_PP%R%NMAX-IMESH)*FROM_PP%R%R(FROM_PP%R%NMAX-IMESH)/sin(QR)
-!!      WRITE(6,*) 'alpha=' , alpha
-!      DO j = 1, FROM_PP%R%NMAX-IMESH
-!         QR = Qloc*FROM_PP%R%R(j)
-!         POTPSC_TEST(j) = alpha*sin(QR)/FROM_PP%R%R(j)
-!!         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
-!!         WRITE(6,'(5f20.8)') PP%R%R(j), PP%POTPSC(j), POTPS_EFF(j), PP%POTAE(j), PP%POTPS(j)
-!      ENDDO
+      DO j = 1, FROM_PP%R%NMAX
+         POTPSC_CHECK(j) = POTAEC(j)
+      ENDDO
+      CALL GRAD(FROM_PP%R, POTAEC, DPOTAE_EFF)
+
+      IMESH = 39
+!      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
+      alpha = 1.0-DPOTAE_EFF(FROM_PP%R%NMAX-IMESH)/POTAEC(FROM_PP%R%NMAX-IMESH)
+!      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
+      beta = 1.0
+
+      CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
+!      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
+!      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
+      QR = ROOT(1); Qloc = QR/FROM_PP%R%R(FROM_PP%R%NMAX-IMESH)
+!      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
+      alpha = POTAEC(FROM_PP%R%NMAX-IMESH)*FROM_PP%R%R(FROM_PP%R%NMAX-IMESH)/sin(QR)
+!      WRITE(6,*) 'alpha=' , alpha
+      DO j = 1, FROM_PP%R%NMAX-IMESH
+         QR = Qloc*FROM_PP%R%R(j)
+         POTPSC_CHECK(j) = alpha*sin(QR)/FROM_PP%R%R(j)
+!         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
+!         WRITE(6,'(5f20.8)') PP%R%R(j), PP%POTPSC(j), POTPS_EFF(j), PP%POTAE(j), PP%POTPS(j)
+      ENDDO
 
 !      DO j =1, FROM_PP%R%NMAX
-!         WRITE(95,*) FROM_PP%R%R(j), POTPSC_TEST(j)
+!         WRITE(95,*) FROM_PP%R%R(j), POTPSC_TEST(j), POTPSC_CHECK(j)
 !      ENDDO
 !      STOP
 !   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POTPS !!!!!  ----------------------    !     
@@ -1711,7 +1737,7 @@
 
 !      POTPSC_CHECK(:) = FROM_PP%POTPSC(:)
 !      POTPSC_CHECK(:) =  POTPSC_TEST(:)
-      CALL FOURPOT_TO_Q_CHECK( FROM_PP%R%R(FROM_PP%R%NMAX), FROM_PP%ZVALF_ORIG, POTPSC_TEST,   &
+      CALL FOURPOT_TO_Q_CHECK( FROM_PP%R%R(FROM_PP%R%NMAX), FROM_PP%ZVALF_ORIG, POTPSC_CHECK,   &
      &             POTPS_G, SIZE(FROM_PP%PSP,1), FROM_PP%PSGMAX/SIZE(FROM_PP%PSP,1), FROM_PP%R, IU6)
 
 
@@ -2469,7 +2495,14 @@
       READ(89,*) 
       WRITE(88,'(A9,32X)')'(5E20.12)' 
 
-      DO I =1, 2
+       READ(89,'(A80)') CSEL
+       WRITE(88,'(A80)') CSEL
+       WRITE(6,*) 'CSEL=', CSEL
+       READ(89,*) (POTCAR_DATA (J),J=1,CHANNELS*CHANNELS)
+       WRITE(6,*) 'CHANNELS=', CHANNELS
+       WRITE(6,*) 'TEST=', (POTCAR_DATA (J),J=1,CHANNELS*CHANNELS) 
+       WRITE(88,'(5E20.12)') ((FROM_PP%QPAW (I,J,0),J=1,CHANNELS),I=1,CHANNELS)
+!!!!!   uccopancies in atom   !!!!!
 !      NRANGE = (PAW%l(PAW%nbase)+1)**4
 !!!!!   augmentation charge (non spherical)   !!!!!
        READ(89,'(A80)') CSEL
@@ -2479,12 +2512,12 @@
        WRITE(6,*) 'CHANNELS=', CHANNELS
        WRITE(6,*) 'TEST=', (POTCAR_DATA (J),J=1,CHANNELS*CHANNELS) 
        WRITE(88,'(5E20.12)') (POTCAR_DATA (J),J=1,CHANNELS*CHANNELS)
+!       WRITE(88,'(5E20.12)') (FROM_PP%QPAW (J),J=1,CHANNELS*CHANNELS)
 !!!!!   uccopancies in atom   !!!!!
 !      READ(89,'(A80)') CSEL
 !      WRITE(88,'(A80)') CSEL
 !      READ(89,*) (POTCAR_DATA (J),J=1,CHANNELS*CHANNELS)
 !      WRITE(88,'(5E20.12)') (POTCAR_DATA (J),J=1, CHANNELS*CHANNELS)
-      ENDDO
 !!!!!            grid              !!!!!
       READ(89,'(A80)') CSEL
       WRITE(88,'(A80)') CSEL
