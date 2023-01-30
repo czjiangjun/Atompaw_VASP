@@ -50,6 +50,8 @@ y
 n
 y
 -0.10    # 1.38, -0.10
+y
+1.38
 n
 y
 -0.40    # 0.05 能量往大调压制波函数
@@ -58,6 +60,8 @@ vasprrkj  vanderbiltortho  Besselshape  #Vanderbilt vasprrkj  vanderbiltortho  B
 2 3   bessel  #1 3   MTROULLIER
 1.5
 1.5
+1.6
+1.6
 1.6
 1.6
 1.7
