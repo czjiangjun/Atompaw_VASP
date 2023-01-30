@@ -29,22 +29,20 @@ def Write_Atom_in(E_name, Z_Val):
       Atom = ''.join(element)
       file_handle.write(Atom)
       AtomPAW_In = ''' 
-LDA-PW scalarrelativistic loggridv4 5001 8.5 2.05 loggderivrange -25. 25. 2500
-3 3 0 0 0 0
-3 1 2
+LDA-PW scalarrelativistic loggridv4 8001 13.2 2.05 loggderivrange -25. 25. 2500
+2 2 0 0 0 0
+2 1 2
 0 0 0
 c
-c
 v
-c
 v
 1
-1.62  1.51   1.54    1.505 # 1.85 1.51 1.54 1.51
+1.43  1.25   1.25    1.25 # 1.85 1.51 1.54 1.51
 y
--0.57   # -0.70 能量往大调压制波函数
+-0.55   # -0.70 能量往大调压制波函数
 n
 y
-0.18    # 0.05 能量往大调压制波函数
+2.50    # 0.05 能量往大调压制波函数
 n
 vasprrkj  vanderbiltortho  Besselshape  #Vanderbilt vasprrkj  vanderbiltortho  Besselshape
 1 3   bessel  #1 3   MTROULLIER
@@ -52,7 +50,6 @@ vasprrkj  vanderbiltortho  Besselshape  #Vanderbilt vasprrkj  vanderbiltortho  B
 1.5
 1.6
 1.7
-1.6
 XMLOUT
 default
 PWPAWOUT
@@ -175,7 +172,7 @@ def Data_compare_Fig2(Properties, data, name):
 #    Fig.pdf(Fig_name)
 
 def main():
-    Write_Atom_in('Si', 14)
+    Write_Atom_in('C', 6)
 
     os.system("~/Softs/atompaw_test/src/atompaw < in > out")
     #exit ()
@@ -195,9 +192,8 @@ def main():
 
 #    Data_compare_Fig2("potential",  "POTAE", "POTPSC", "VASP")
 #    os.system("evince *-data.ps")
-    os.system("cat in > Si.in")
-    os.system("cat in > Si_orig.in")
-    exit()
+    os.system("cat in > C.in")
+    os.system("cat in > C_orig.in")
 
 if __name__ == '__main__':
     main()
