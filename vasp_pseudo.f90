@@ -275,20 +275,23 @@
          POTPS_EFF(j) = POTAE_EFF(j)
       ENDDO
       CALL GRAD(PP%R, POTAE_EFF, DPOTAE_EFF)
+!      IMESH = 41
+      IMESH = 0
 
 !      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
-      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX-41)/POTAE_EFF(PP%R%NMAX-41)
+      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX-IMESH)/POTAE_EFF(PP%R%NMAX-IMESH)
 !      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
       beta = 1.0
 
       CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
 !      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
 !      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
-      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX-41)
-!      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
-      alpha = POTAE_EFF(PP%R%NMAX-41)*PP%R%R(PP%R%NMAX-41)/sin(QR)
+      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX-IMESH)
+      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
+!      alpha = POTAE_EFF(PP%R%NMAX-41)*PP%R%R(PP%R%NMAX-41)/sin(QR)
 !      WRITE(6,*) 'alpha=' , alpha
-      DO j = 1, PP%R%NMAX-41
+!      DO j = 1, PP%R%NMAX
+      DO j = 1, PP%R%NMAX-IMESH
          QR = Qloc*PP%R%R(j)
          POTPS_EFF(j) = alpha*sin(QR)/PP%R%R(j)
 !         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
@@ -348,7 +351,8 @@
       ENDDO
       CALL GRAD(PP%R, POTAEC, DPOTAE_EFF)
 
-      IMESH = 40
+!      IMESH = 40
+      IMESH = 0
 !      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
       alpha = 1.0-DPOTAE_EFF(PP%R%NMAX-IMESH)/POTAEC(PP%R%NMAX-IMESH)
 !      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
@@ -392,8 +396,9 @@
 !          WRITE(6,*) 'TEST=', POTPS_TEST(I)
 !      ENDDO
 
-!      POTPSC_CHECK(:) = PP%POTPSC(:)
-      POTPSC_CHECK(:) = POTPSC_TEST(:)
+      POTPSC_CHECK(:) = PP%POTPSC(:)
+!      POTPSC_CHECK(:) = - POTPS_EFF(:)  !PP%POTPS(:)
+!      POTPSC_CHECK(:) = POTPSC_TEST(:)
       CALL FOURPOT_TO_Q_CHECK( PP%R%R(PP%R%NMAX), PP%ZVALF_ORIG, POTPSC_CHECK,   &
      &             POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
 !      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), POTPS_TEST, POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
@@ -410,10 +415,10 @@
 !   ---------------- !!!!!! FOR CHECK !!!!! -------------------
       
       POTPSC_CHECK(:) = 0.0
-!       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
-!     &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
-       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, POTPS_G, PP%PSGMAX/NPSPTS, &
+       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
      &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
+!       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, POTPS_G, PP%PSGMAX/NPSPTS, &
+!     &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
 
       DO j=1, PP%R%NMAX
          WRITE(IU17,'(6f20.8)') PP%R%R(j), PP%POTPSC(j), POTPSC_TEST(j),  &

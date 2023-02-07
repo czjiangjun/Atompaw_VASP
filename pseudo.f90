@@ -359,7 +359,7 @@ CONTAINS
     CALL make_hf_tp_only(Grid,Pot,PAW,ifinput)
    ELSE IF (Projectorindex==MODRRKJ) THEN
 !    CALL makebasis_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
-    CALL VASP_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
+!    CALL VASP_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
     CALL makebasis_modrrkj(Grid,Pot,Orthoindex,ifinput,success)
    ELSE IF (Projectorindex==VASPRRKJ) THEN
 !           WRITE(6,*) 'TEST_VASP'
@@ -1292,7 +1292,7 @@ CONTAINS
     h=Grid%h
     r=>Grid%r
     irc=PAW%irc
-    nr=MIN(irc+100,n-100)
+    nr=MIN(irc,n-100)
     rc=PAW%rc
     lmax=PAW%lmax
 
@@ -2592,6 +2592,7 @@ CONTAINS
 
   ! Loop on basis elements
     lprev=-1;np=0;rcindex=0;rcval=0
+    write(6,*) 'nbase=',nbase
     do io=1,nbase
 
        l=PAW%l(io)
@@ -2605,6 +2606,7 @@ CONTAINS
       ! Read matching radius
       write(6,'(3i5,1p,e15.7)') io,PAW%np(io),PAW%l(io),PAW%eig(io)
       READ(5,'(a)') inputline
+      write(6,*) 'inputline', inputline
       WRITE(ifinput,'(a)') TRIM(inputline)
       read(inputline,*) rc
       write(6,*) 'reading rc = ', rc

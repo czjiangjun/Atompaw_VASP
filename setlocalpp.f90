@@ -479,7 +479,8 @@ END FUNCTION WINDOW
 
       DO K=1, NMAX
 !         VL(K) = (VL(K)+FELECT*Z*ERRF(ALP*RGRD%R(K)*1.16)/RGRD%R(K))*2._q*PI*PI*RGRD%R(K)
-         VL(K) = (VL(K)+FELECT*Z*ERRF(ALP*RGRD%R(K))/RGRD%R(K))*PI*PI
+!         VL(K) = (VL(K)+FELECT*Z/RGRD%R(K))*ERRF(ALP*RGRD%R(K))*PI*PI
+         VL(K) = VL(K)+FELECT*Z*ERRF(ALP*RGRD%R(K))/RGRD%R(K)
       ENDDO
 
 ! find potential at matching point (RDEP) if supplied
@@ -563,8 +564,10 @@ END FUNCTION WINDOW
 !      PSP=PSP-VLQ
        DO I=2, NQL
          QQ=DELQL*(I-1)
-          PSP(I) = VLQ(I)/4._q/PI0+Z*(1-EXP(-QQ*QQ/4._q/ALP2))*FELECT*4._q*PI0/(QQ*QQ)
-!          PSP(I) = VLQ(I) !/4._q/PI0
+!          PSP(I) = VLQ(I)/4._q/PI0+Z*(1-EXP(-QQ*QQ/4._q/ALP2))*FELECT*4._q*PI0/(QQ*QQ)
+!          WRITE(77,*)QQ, VLQ(I)*QQ
+          PSP(I) =  VLQ(I)+Z*4._q*PI0*FELECT*(1-EXP(-QQ*QQ/4._q/ALP2))/(QQ*QQ)
+!          PSP(I) =  VLQ(I)/QQ!+Z*4._q*PI0*FELECT*(1-EXP(-QQ*QQ/4._q/ALP2))/(QQ*QQ)
        ENDDO
        PSP(1) = 2._q*PSP(2) - PSP(3)
 
@@ -785,7 +788,9 @@ END FUNCTION WINDOW
          ELSE
             FFT(I)=0
          ENDIF
+!         WRITE(78, '(5F15.8)') QQ, FFT(I), VQ(I), -Z*(1-EXP(-QQ*QQ/4/ALP))*4*PI0*FELECT/(QQ*QQ)
       ENDDO
+
       
       CALL REALFT(FFT,NFFT/2,1)
 
@@ -810,6 +815,8 @@ END FUNCTION WINDOW
       IF (LPOT) THEN
          ALPSQRT = SQRT(ALP)
          DO K=2,NFFT/2
+!            WRITE(79,'(5F15.8)') SPL(K,1), SPL(K,2), -FELECT*Z*ERRF(ALPSQRT*SPL(K,1))/SPL(K,1),  &
+!    &                   SPL(K,2) -FELECT*Z*ERRF(ALPSQRT*SPL(K,1))/SPL(K,1)
             SPL(K,2)=SPL(K,2)-FELECT*Z*ERRF(ALPSQRT*SPL(K,1))/SPL(K,1)
          ENDDO
          SPL(1,1)=SPL(1,1)-FELECT*Z*2*ALPSQRT/SQRT(PI0)
@@ -826,6 +833,7 @@ END FUNCTION WINDOW
          CALL SPLVAL(R(K), RHO, DUMMY, SPL, NFFT/2, NFFT/2)
          IF (LPOT) THEN
             POTPSC(K)=RHO
+            WRITE(80,*) R(K), POTPSC(K)
          ELSE
          ! set radially integrated charge
             POTPSC(K)=RHO*4*PI0*R(K)**2
