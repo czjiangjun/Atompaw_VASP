@@ -275,8 +275,8 @@
          POTPS_EFF(j) = POTAE_EFF(j)
       ENDDO
       CALL GRAD(PP%R, POTAE_EFF, DPOTAE_EFF)
-!      IMESH = 41
-      IMESH = 0
+      IMESH = 41
+!      IMESH = 0
 
 !      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
       alpha = 1.0-DPOTAE_EFF(PP%R%NMAX-IMESH)/POTAE_EFF(PP%R%NMAX-IMESH)
@@ -287,7 +287,7 @@
 !      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
 !      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
       QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX-IMESH)
-      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
+      alpha = POTAE_EFF(PP%R%NMAX-IMESH)*PP%R%R(PP%R%NMAX-IMESH)/sin(QR)
 !      alpha = POTAE_EFF(PP%R%NMAX-41)*PP%R%R(PP%R%NMAX-41)/sin(QR)
 !      WRITE(6,*) 'alpha=' , alpha
 !      DO j = 1, PP%R%NMAX
@@ -351,8 +351,8 @@
       ENDDO
       CALL GRAD(PP%R, POTAEC, DPOTAE_EFF)
 
-!      IMESH = 40
-      IMESH = 0
+      IMESH = 38
+!      IMESH = 0
 !      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
       alpha = 1.0-DPOTAE_EFF(PP%R%NMAX-IMESH)/POTAEC(PP%R%NMAX-IMESH)
 !      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
@@ -396,10 +396,12 @@
 !          WRITE(6,*) 'TEST=', POTPS_TEST(I)
 !      ENDDO
 
-      POTPSC_CHECK(:) = PP%POTPSC(:)
+!      POTPSC_CHECK(:) = PP%POTPSC(:)
 !      POTPSC_CHECK(:) = - POTPS_EFF(:)  !PP%POTPS(:)
 !      POTPSC_CHECK(:) = POTPSC_TEST(:)
-      CALL FOURPOT_TO_Q_CHECK( PP%R%R(PP%R%NMAX), PP%ZVALF_ORIG, POTPSC_CHECK,   &
+!      CALL FOURPOT_TO_Q_CHECK( PP%R%R(PP%R%NMAX), PP%ZVALF_ORIG, PP%POTPSC,   &
+      CALL FOURPOT_TO_Q_CHECK( PP%R%R(PP%R%NMAX), PP%ZVALF_ORIG, POTPSC_TEST,   &
+!      CALL FOURPOT_TO_Q_CHECK( PP%R%R(PP%R%NMAX), PP%ZVALF_ORIG, POTPSC_CHECK,   &
      &             POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
 !      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), POTPS_TEST, POTPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
 
@@ -414,9 +416,9 @@
 !      PP%PSP(:,2) = POTPS_G(:)
 !   ---------------- !!!!!! FOR CHECK !!!!! -------------------
       
-      POTPSC_CHECK(:) = 0.0
-       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
-     &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
+!      POTPSC_CHECK(:) = 0.0
+!!       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, PP%PSP(:,2), PP%PSGMAX/NPSPTS, &
+!!     &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
 !       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, POTPS_G, PP%PSGMAX/NPSPTS, &
 !     &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
 
@@ -958,11 +960,12 @@
 
          IF (PRESENT(RC_CUT)) THEN
             irc= FindGridIndex(Grid2, RC_CUT)
-            rc = RC_CUT
          ELSE
             irc = PAW%irc_vloc
-            rc = Grid2%r(irc)
          ENDIF
+            rc = Grid2%r(irc)
+
+         WRITE(6,*) 'For VASP: irc = ', irc, 'r_vloc=', rc
 
          alpha=1-rc*Gfirstderiv(Grid2,irc,POTAE)/POTAE(irc)
          beta=1.0d0
@@ -1627,6 +1630,7 @@
       ENDDO
       CALL GRAD(FROM_PP%R, POTAE_EFF, DPOTAE_EFF)
 
+      IMESH = 41
 !      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
       alpha = 1.0-DPOTAE_EFF(FROM_PP%R%NMAX-41)/POTAE_EFF(FROM_PP%R%NMAX-41)
 !      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
@@ -1635,11 +1639,11 @@
       CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
 !      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
 !      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
-      QR = ROOT(1); Qloc = QR/FROM_PP%R%R(FROM_PP%R%NMAX-41)
+      QR = ROOT(1); Qloc = QR/FROM_PP%R%R(FROM_PP%R%NMAX-IMESH)
 !      alpha = POTAE_EFF(PP%R%NMAX)*PP%R%R(PP%R%NMAX)/sin(QR)
-      alpha = POTAE_EFF(FROM_PP%R%NMAX-41)*FROM_PP%R%R(FROM_PP%R%NMAX-41)/sin(QR)
+      alpha = POTAE_EFF(FROM_PP%R%NMAX-IMESH)*FROM_PP%R%R(FROM_PP%R%NMAX-IMESH)/sin(QR)
 !      WRITE(6,*) 'alpha=' , alpha
-      DO j = 1, FROM_PP%R%NMAX-41
+      DO j = 1, FROM_PP%R%NMAX-IMESH
          QR = Qloc*FROM_PP%R%R(j)
          POTPS_EFF(j) = alpha*sin(QR)/FROM_PP%R%R(j)
 !         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
@@ -1704,7 +1708,7 @@
       ENDDO
       CALL GRAD(FROM_PP%R, POTAEC, DPOTAE_EFF)
 
-      IMESH = 39
+      IMESH = 38
 !      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
       alpha = 1.0-DPOTAE_EFF(FROM_PP%R%NMAX-IMESH)/POTAEC(FROM_PP%R%NMAX-IMESH)
 !      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
@@ -1742,6 +1746,7 @@
 
 !      POTPSC_CHECK(:) = FROM_PP%POTPSC(:)
 !      POTPSC_CHECK(:) =  POTPSC_TEST(:)
+!      CALL FOURPOT_TO_Q_CHECK( FROM_PP%R%R(FROM_PP%R%NMAX), FROM_PP%ZVALF_ORIG, POTPSC_TEST,   &
       CALL FOURPOT_TO_Q_CHECK( FROM_PP%R%R(FROM_PP%R%NMAX), FROM_PP%ZVALF_ORIG, POTPSC_CHECK,   &
      &             POTPS_G, SIZE(FROM_PP%PSP,1), FROM_PP%PSGMAX/SIZE(FROM_PP%PSP,1), FROM_PP%R, IU6)
 

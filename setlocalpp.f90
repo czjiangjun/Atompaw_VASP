@@ -440,7 +440,7 @@ END FUNCTION WINDOW
 !
 !*******************************************************************
 
-    SUBROUTINE FOURPOT_TO_Q_CHECK( RDEP_IN, Z, VL, PSP, NQL, DELQL, RGRD, IU6 )
+    SUBROUTINE FOURPOT_TO_Q_CHECK( RDEP_IN, Z, VL_ORIG, PSP, NQL, DELQL, RGRD, IU6 )
       USE prec
 !      USE constant
       USE radial
@@ -451,6 +451,7 @@ END FUNCTION WINDOW
                             ! potential is set to zero outside this point
       REAL(q) Z             ! valence
       REAL(q) VL(RGRD%NMAX) ! potential in real space
+      REAL(q) VL_ORIG(RGRD%NMAX) ! potential in real space
       INTEGER NQL           ! number of grid points in local potential
       REAL(q) PSP(NQL)      ! on entry: old local potential in reciprocal space
                             ! on exit: new local potential in reciprocal space
@@ -480,7 +481,7 @@ END FUNCTION WINDOW
       DO K=1, NMAX
 !         VL(K) = (VL(K)+FELECT*Z*ERRF(ALP*RGRD%R(K)*1.16)/RGRD%R(K))*2._q*PI*PI*RGRD%R(K)
 !         VL(K) = (VL(K)+FELECT*Z/RGRD%R(K))*ERRF(ALP*RGRD%R(K))*PI*PI
-         VL(K) = VL(K)+FELECT*Z*ERRF(ALP*RGRD%R(K))/RGRD%R(K)
+         VL(K) = VL_ORIG(K)+FELECT*Z*ERRF(ALP*RGRD%R(K))/RGRD%R(K)
       ENDDO
 
 ! find potential at matching point (RDEP) if supplied
