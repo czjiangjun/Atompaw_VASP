@@ -786,10 +786,18 @@ END FUNCTION WINDOW
 ! the charge is given by
 ! rho(q) = q^2/ ( 4 Pi e^2) V(q) 
             FFT(I)=(VQ(I)*(QQ*QQ/(4*PI0*FELECT))-Z)*QQ*EXP(-QQ*QQ/4/ALPC)
+! For Charge_Core
+!             FFT(I)=(VQ(I)-Z)*QQ*EXP(-QQ*QQ/4/ALPC)
+! For Charge_Valence
+!            FFT(I)=VQ(I)*QQ*EXP(-QQ*QQ/4/ALPC)
          ELSE
             FFT(I)=0
          ENDIF
+! fft of potential
 !         WRITE(78, '(5F15.8)') QQ, FFT(I), VQ(I), -Z*(1-EXP(-QQ*QQ/4/ALP))*4*PI0*FELECT/(QQ*QQ)
+! fft of charge_ONLY
+!         WRITE(78, '(5F15.8)') QQ, FFT(I)/QQ, VQ(I)*(QQ*QQ/(4*PI0*FELECT))*(EXP(-QQ*QQ/4/ALP)), Z/4.0/PI0*(EXP(-QQ*QQ/4/ALP))
+!         WRITE(78, '(5F15.8)') QQ, FFT(I), FFT(I)/QQ, FFT(I)/QQ/EXP(-QQ*QQ/4/ALPC), Z/4.0/PI0*(EXP(-QQ*QQ/4/ALP))
       ENDDO
 
       
@@ -811,6 +819,7 @@ END FUNCTION WINDOW
 ! since 2 / pi \int_0^Infty sin(qr) dr =  delta(q)
       DO K=2,NFFT/2
          SPL(K,2)=SPL(K,2)/SPL(K,1)/2/PI0/PI0
+!         WRITE(79, '(5F15.8)') SPL(K,1), SPL(K,2)*SPL(K,1)*SPL(K,1)*2.0*SQRT(PI0)
       ENDDO
 
       IF (LPOT) THEN
@@ -834,7 +843,7 @@ END FUNCTION WINDOW
          CALL SPLVAL(R(K), RHO, DUMMY, SPL, NFFT/2, NFFT/2)
          IF (LPOT) THEN
             POTPSC(K)=RHO
-            WRITE(80,*) R(K), POTPSC(K)
+!            WRITE(80,*) R(K), POTPSC(K)
          ELSE
          ! set radially integrated charge
             POTPSC(K)=RHO*4*PI0*R(K)**2

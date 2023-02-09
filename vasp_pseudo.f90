@@ -53,7 +53,7 @@
          INTEGER :: LMAX_TABLE, LYMAX 
          INTEGER :: CH1, CH2, LL, LLP, LMIN, LMAIN
          REAL(q) ZVALF(1),POMASS(1),RWIGS(1), VCA(1)  ! valence, mass, wigner seitz radius
-         REAL(q) ROOT(2), QR, Qloc, R_CUT
+         REAL(q) ROOT(2), QR, Qloc, R_CUT, QQ
          REAL(q) :: DHARTREE, QCORE,SCALE, DOUBLEAE, EXCG
          REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOPS00(:)
          REAL(q), ALLOCATABLE :: POTAEC(:), POTPSC_TEST(:), POT_TEST(:), POTAE_TEST(:), POTPS_TEST(:)
@@ -423,13 +423,17 @@
 !     &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
 
       DO j=1, PP%R%NMAX
+
          WRITE(IU17,'(6f20.8)') PP%R%R(j), PP%POTPSC(j), POTPSC_TEST(j),  &
      &                         PP%POTPSC(j) + PP%POTPS(j), POTPSC_CHECK(j)
       ENDDO
 
 !   ---------------- !!!!!! CORE-CHG IN RECIPROCAL SPACE FROM RHOPS !!!!!  ----------------------    !     
       CORPS_G(:) = 0.0
-      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), PP%RHOPS,   &
+      DO j=1, PP%R%NMAX
+         POTPSC_CHECK(j) = PP%RHOPS(j)/SCALE/PP%R%R(j)/PP%R%R(j)
+      ENDDO
+      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), POTPSC_CHECK,   &
      &             CORPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
 
       OPEN(UNIT=25,FILE='VASP_G_PCORE',STATUS='UNKNOWN',IOSTAT=IERR)
@@ -439,10 +443,18 @@
       DO j=1, SIZE(PP%PSP,1)
          WRITE(IU21,'(6f20.8)') PP%PSP(j,1), PP%PSPCOR(j), -CORPS_G(j)
       ENDDO
+
       PP%PSPCOR(:) = -CORPS_G(:)
+
+!   ---------------- !!!!!! FOR CHECK !!!!! -------------------
+!      RHOPS00 = 0.d0
+!       CALL POTTORHO( PP%ZVALF_ORIG+10, NPSPTS, PP%PSPCOR, PP%PSGMAX/NPSPTS, &
+!     &            .FALSE. , PP%R%NMAX, PP%R%R ,  RHOPS00 )                        
+
 !   ---------------- !!!!!! PSEUDO-CHG IN RECIPROCAL SPACE FROM  PSPRHO !!!!!  ----------------------    !     
       RHOPS_G(:) = 0.0
-      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), RHOPS00+PP%RHOPS,   &
+      RHOPS00(:) = RHOPS00/SCALE
+      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), RHOPS00,   &
      &             RHOPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
 
       OPEN(UNIT=27,FILE='VASP_G_PSPRHO',STATUS='UNKNOWN',IOSTAT=IERR)
@@ -450,9 +462,21 @@
          OPEN(UNIT=27,FILE='VASP_G_PSPRHO',STATUS='OLD')
       ENDIF
       DO j=1, SIZE(PP%PSP,1)
-         WRITE(IU23,'(6f20.8)') PP%PSP(j,1), PP%PSPRHO(j), -RHOPS_G(j)/4.0/SQRT(PI0)
+         QQ = (j-1)*PP%PSGMAX/SIZE(PP%PSP,1)
+         WRITE(IU23,'(6f20.8)') PP%PSP(j,1), PP%PSPRHO(j), -RHOPS_G(j)/2.0,       &
+     &    PP%ZVALF_ORIG*(EXP(-QQ*QQ*4*AUTOA*AUTOA)),        &
+     &    -RHOPS_G(j)/2.0 - PP%ZVALF_ORIG*(EXP(-QQ*QQ/4*AUTOA*AUTOA)),    &
+     &    PP%PSPRHO(j)- PP%ZVALF_ORIG*(EXP(-QQ*QQ/3.5*4*AUTOA*AUTOA))
       ENDDO
-      PP%PSPRHO(j) = -RHOPS_G(j)/4.0/SQRT(PI0)
+      PP%PSPRHO(j) = -RHOPS_G(j)/2.0
+
+!   ---------------- !!!!!! FOR CHECK !!!!! -------------------
+!      DO j=1, PP%R%NMAX
+!         WRITE(77,'(6f20.8)') PP%R%R(j), PP%RHOPS(j), RHOPS00(j)/SCALE
+!      ENDDO
+!      RHOPS00 = 0.d0
+!       CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, PP%PSPRHO, PP%PSGMAX/NPSPTS, &
+!     &            .FALSE. , PP%R%NMAX, PP%R%R ,  RHOPS00 )                        
 
       WRITE(6,*) 'VALUE=', PP%ZVALF_ORIG
       WRITE(6,*) 'NPSPTS=', NPSPTS
@@ -570,13 +594,13 @@
       DEALLOCATE(DIJ, DION)
 
 !   ---------------- !!!!!! PROJECTOR IN REAL SPACE FROM  PROJECTOR !!!!!  ----------------------    !     
-!      OPEN(UNIT=29,FILE='VASP_PSPNL',STATUS='UNKNOWN',IOSTAT=IERR)
-!      IF (IERR/=0) THEN
-!         OPEN(UNIT=29,FILE='VASP_PSPNL',STATUS='OLD')
-!      ENDIF
-!      DO j=1, NPSRNL
-!         WRITE(IU25,'(6f20.8)') PP%PSPRNL
-!      ENDDO
+      OPEN(UNIT=29,FILE='VASP_PSPNL',STATUS='UNKNOWN',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=29,FILE='VASP_PSPNL',STATUS='OLD')
+      ENDIF
+      DO j=1, NPSRNL
+         WRITE(IU25,'(6f20.8)') PP%PSPRNL(j)
+      ENDDO
 
 !             WRITE(IU19,*)
 !             WRITE(IU19,*) PP%PSDMAX
