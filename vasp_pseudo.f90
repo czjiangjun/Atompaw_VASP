@@ -463,10 +463,7 @@
       ENDIF
       DO j=1, SIZE(PP%PSP,1)
          QQ = (j-1)*PP%PSGMAX/SIZE(PP%PSP,1)
-         WRITE(IU23,'(6f20.8)') PP%PSP(j,1), PP%PSPRHO(j), -RHOPS_G(j)/2.0,       &
-     &    PP%ZVALF_ORIG*(EXP(-QQ*QQ*4*AUTOA*AUTOA)),        &
-     &    -RHOPS_G(j)/2.0 - PP%ZVALF_ORIG*(EXP(-QQ*QQ/4*AUTOA*AUTOA)),    &
-     &    PP%PSPRHO(j)- PP%ZVALF_ORIG*(EXP(-QQ*QQ/3.5*4*AUTOA*AUTOA))
+         WRITE(IU23,'(6f20.8)') PP%PSP(j,1), PP%PSPRHO(j), -RHOPS_G(j)/2.0
       ENDDO
       PP%PSPRHO(j) = -RHOPS_G(j)/2.0
 
@@ -594,16 +591,35 @@
       DEALLOCATE(DIJ, DION)
 
 !   ---------------- !!!!!! PROJECTOR IN REAL SPACE FROM  PROJECTOR !!!!!  ----------------------    !     
-      OPEN(UNIT=29,FILE='VASP_PSPNL',STATUS='UNKNOWN',IOSTAT=IERR)
+      OPEN(UNIT=29,FILE='VASP_PSPRNL',STATUS='UNKNOWN',IOSTAT=IERR)
       IF (IERR/=0) THEN
-         OPEN(UNIT=29,FILE='VASP_PSPNL',STATUS='OLD')
+         OPEN(UNIT=29,FILE='VASP_PSPRNL',STATUS='OLD')
       ENDIF
-      DO j=1, NPSRNL
-         WRITE(IU25,'(6f20.8)') PP%PSPRNL(j)
+      DO i=1, 4
+         DO j=1, NPSRNL
+            WRITE(IU25,'(6f20.8)') PP%PSPRNL(j,1,i), PP%PSPRNL(j,2,i)
+         ENDDO
+         CALL FOURPOT_TO_Q( PP%PSRNL(:), RHOPS00,   &
+     &             RHOPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
+         WRITE(IU25,*)
       ENDDO
 
 !             WRITE(IU19,*)
 !             WRITE(IU19,*) PP%PSDMAX
+!             WRITE(IU19,*)
+
+      OPEN(UNIT=31,FILE='VASP_PSPNL',STATUS='UNKNOWN',IOSTAT=IERR)
+      IF (IERR/=0) THEN
+         OPEN(UNIT=31,FILE='VASP_PSPNL',STATUS='OLD')
+      ENDIF
+      DO i=1, 4
+         DO j=1, NPSNL
+            QQ=PP%PSMAXN/NPSNL*(j-1)
+            WRITE(55,*) QQ, PP%PSPNL(j,i)
+         ENDDO
+         WRITE(55,*)
+      ENDDO
+
 !             WRITE(IU19,*)
 !      STOP
 
