@@ -27,6 +27,7 @@
          IMPLICIT REAL(q)  (A-B,D-H,O-Z)
 
 !         TYPE(GridInfo), INTENT(IN) :: Grid
+          TYPE (rgrid)    :: PR        ! radial grid for Projector
          TYPE(GridInfo) :: Grid
 !         REAL(8), INTENT(IN) :: coreden(:)
          Type(OrbitInfo), INTENT(IN) :: Orbit
@@ -57,6 +58,7 @@
          REAL(q) :: DHARTREE, QCORE,SCALE, DOUBLEAE, EXCG
          REAL(q), ALLOCATABLE :: RHO(:,:,:), POT(:,:,:), V(:,:,:), RHOAE00(:), RHOPS00(:)
          REAL(q), ALLOCATABLE :: POTAEC(:), POTPSC_TEST(:), POT_TEST(:), POTAE_TEST(:), POTPS_TEST(:)
+         REAL(q), ALLOCATABLE :: PSPNL(:), PSPRNL(:)
          REAL(q), ALLOCATABLE :: POTPSC_CHECK(:)
          REAL(q), ALLOCATABLE :: CRHODE(:,:)
          REAL(q), ALLOCATABLE :: RHOLM(:), DLM(:), DLLMM(:,:,:)!, GAUSSIAN(:)
@@ -384,7 +386,15 @@
       ENDIF
 !      PP%POTPSC(:) = POTPSC_TEST(:)
 
-!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POTPS !!!!!  ----------------------    !     
+!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM PSPCORE !!!!!  ----------------------    !     
+
+!      POTPS_G(:) = 0.0
+!      DO j=1, SIZE(PP%PSP,1)
+!         QQ=(j-1)*PP%PSGMAX/ SIZE(PP%PSP,1)
+!         POTPS_G(j)=PP%PSPCOR(j)*4.0*PI0/QQ/QQ*(1-EXP(-QQ*QQ/4*AUTOA*AUTOA))
+!         WRITE(78,'(6f20.8)') PP%PSP(j,1), POTPS_G(j)
+!      ENDDO
+!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POTPSC !!!!!  ----------------------    !     
 
 !!      CALL FOURPOT_TO_Q( PP%RDEP, POT, PP%PSP(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
       POTPS_G(:) = 0.0
@@ -591,36 +601,54 @@
       DEALLOCATE(DIJ, DION)
 
 !   ---------------- !!!!!! PROJECTOR IN REAL SPACE FROM  PROJECTOR !!!!!  ----------------------    !     
-      OPEN(UNIT=29,FILE='VASP_PSPRNL',STATUS='UNKNOWN',IOSTAT=IERR)
-      IF (IERR/=0) THEN
-         OPEN(UNIT=29,FILE='VASP_PSPRNL',STATUS='OLD')
-      ENDIF
+      ALLOCATE(PSPNL(NPSNL), PSPRNL(NPSRNL))
+!      OPEN(UNIT=29,FILE='VASP_PSPRNL',STATUS='UNKNOWN',IOSTAT=IERR)
+!      IF (IERR/=0) THEN
+!         OPEN(UNIT=29,FILE='VASP_PSPRNL',STATUS='OLD')
+!      ENDIF
+      PP%R%NMAX = NPSRNL
+      PR%NMAX = NPSRNL
+      ALLOCATE(PR%R(PR%NMAX))
       DO i=1, 4
+      RHOPS_G = 0.0
          DO j=1, NPSRNL
-            WRITE(IU25,'(6f20.8)') PP%PSPRNL(j,1,i), PP%PSPRNL(j,2,i)
+            PP%R%R(j)=PP%PSPRNL(j,1,i)
+            PR%R(j)=PP%PSPRNL(j,1,i)
+            PSPRNL(j)=PP%PSPRNL(j,2,i)
+!            WRITE(IU25,'(6f20.8)') PP%PSPRNL(j,1,i), PP%PSPRNL(j,2,i)
+            WRITE(75,'(6f20.8)') PP%R%R(j), PSPRNL(j)
          ENDDO
-         CALL FOURPOT_TO_Q( PP%PSRNL(:), RHOPS00,   &
-     &             RHOPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
+
+         CALL FOURPOT_TO_Q( PP%R%R(NPSRNL), PSPRNL,   &
+!         CALL FOURPOT_TO_Q( PR%R(NPSRNL), PSPRNL,   &
+     &             RHOPS_G, NPSRNL, PP%PSMAXN/NPSRNL, PP%R, IU6)
+!     &             RHOPS_G, NPSRNL, PP%PSMAXN/NPSRNL, PR, IU6)
          WRITE(IU25,*)
+         DO j=1, NPSNL
+            QQ=PP%PSMAXN/NPSNL*(j-1)
+            WRITE(78,'(6f20.8)')QQ, RHOPS_G(j)
+         ENDDO
+         WRITE(78,*)
       ENDDO
 
 !             WRITE(IU19,*)
 !             WRITE(IU19,*) PP%PSDMAX
 !             WRITE(IU19,*)
 
-      OPEN(UNIT=31,FILE='VASP_PSPNL',STATUS='UNKNOWN',IOSTAT=IERR)
-      IF (IERR/=0) THEN
-         OPEN(UNIT=31,FILE='VASP_PSPNL',STATUS='OLD')
-      ENDIF
+!      OPEN(UNIT=31,FILE='VASP_PSPNL',STATUS='UNKNOWN',IOSTAT=IERR)
+!      IF (IERR/=0) THEN
+!         OPEN(UNIT=31,FILE='VASP_PSPNL',STATUS='OLD')
+!      ENDIF
       DO i=1, 4
          DO j=1, NPSNL
             QQ=PP%PSMAXN/NPSNL*(j-1)
-            WRITE(55,*) QQ, PP%PSPNL(j,i)
+            WRITE(76,*) QQ, j, PP%PSPNL(j,i)
          ENDDO
-         WRITE(55,*)
+         WRITE(76,*)
       ENDDO
 
 !             WRITE(IU19,*)
+      DEALLOCATE(PR%R, PSPNL, PSPRNL)
 !      STOP
 
 !!!! -------------- UNIT IN VASP     E: Hartree   r: Angstrom ------------------ !!!!
@@ -889,7 +917,7 @@
          OPEN(UNIT=26,FILE='ATOM_PROJECT',STATUS='UNKNOWN',IOSTAT=IERR)
          DO i=1, PAW%nbase
            DO j=1, Grid%n
-            WRITE(IU22,'(6f20.8)') Grid%r(j)*AUTOA, PAW%otp(j,i)*SQRT(RYTOEV)
+            WRITE(IU22,'(6f20.8)') Grid%r(j)*AUTOA, PAW%otp(j,i)!*SQRT(RYTOEV)
            ENDDO
          ENDDO
 
@@ -2138,7 +2166,7 @@
 !           WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSNL)
            WRITE(89,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSNL)
 
-           DO I=0, NPSNL
+           DO I=1, NPSNL
               WRITE(29,*) POTCAR_G_PARAM/NPSNL*(I-1), POTCAR_DATA(I)
            ENDDO
 
@@ -2514,7 +2542,7 @@
            READ(89,*) (POTCAR_DATA (I),I=1,NPSNL)
            WRITE(88,'(5E16.8)') (POTCAR_DATA (I),I=1,NPSNL)
 
-!           DO I=0, NPSNL
+!           DO I=1, NPSNL
 !              WRITE(29,*) POTCAR_G_PARAM/NPSNL*(I-1), POTCAR_DATA(I)
 !           ENDDO
 
