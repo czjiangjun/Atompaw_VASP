@@ -27,7 +27,8 @@
          IMPLICIT REAL(q)  (A-B,D-H,O-Z)
 
 !         TYPE(GridInfo), INTENT(IN) :: Grid
-          TYPE (rgrid)    :: PR        ! radial grid for Projector
+         TYPE (rgrid)    :: PR        ! radial grid for Projector
+         TYPE (rgrid)    :: FR        ! radial grid for Projector
          TYPE(GridInfo) :: Grid
 !         REAL(8), INTENT(IN) :: coreden(:)
          Type(OrbitInfo), INTENT(IN) :: Orbit
@@ -37,7 +38,7 @@
          REAL(q), ALLOCATABLE :: Pot_eff(:), Pot_teff(:)
          REAL(q), ALLOCATABLE :: PotAE(:), PotAE00(:), PotPS(:), PotPSC(:), PotPSCr(:)
          REAL(q), ALLOCATABLE :: POTAE_EFF(:), DPOTAE_EFF(:), POTPS_EFF(:)
-         REAL(q), ALLOCATABLE :: POTPS_G(:), CORPS_G(:), RHOPS_G(:)
+         REAL(q), ALLOCATABLE :: POTPS_G_EFF(:), POTPS_G(:), CORPS_G(:), RHOPS_G(:)
          REAL(q), ALLOCATABLE :: pdensity(:), den(:) ,cpdensity(:)
          REAL(q), ALLOCATABLE :: TMP(:),DTMP(:),VTMP(:,:,:), DIJ(:,:), DION(:,:)
          REAL(q), ALLOCATABLE :: PARWKINAE(:,:), PARWKINPS(:,:)
@@ -167,6 +168,7 @@
       ALLOCATE(POTAE_EFF(PP%R%NMAX),DPOTAE_EFF(PP%R%NMAX), POTPS_EFF(PP%R%NMAX) )
       ALLOCATE(POT_TEST(PP%R%NMAX),POTAE_TEST(PP%R%NMAX), POTPSC_TEST(PP%R%NMAX) )
       ALLOCATE(POTPSC_CHECK(PP%R%NMAX))
+      ALLOCATE(POTPS_G_EFF(PP%R%NMAX))
       ALLOCATE(POTPS_G(NPSPTS), CORPS_G(NPSPTS), RHOPS_G(NPSPTS))
       ALLOCATE(POTPS_TEST(PP%R%NMAX))
 !      ALLOCATE(V1(PP%R%NMAX, LMMAX,1), V2(PP%R%NMAX, LMMAX,1))
@@ -386,14 +388,78 @@
       ENDIF
 !      PP%POTPSC(:) = POTPSC_TEST(:)
 
-!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM PSPCORE !!!!!  ----------------------    !     
-
-!      POTPS_G(:) = 0.0
+!   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM PSPCORE !   (TESTED)!!!!!  ----------------------    !     
+!     FR%NMAX = PP%R%NMAX
+!     ALLOCATE(FR%R(FR%NMAX))
+!     POTPS_G(:) = 0.0
+!     POTPS_G_EFF(:) = 0.0
+!
+!     DO j=1, PP%R%NMAX
+!        FR%R(j) = PP%R%R(j)
+!     ENDDO
+!!!!!!!!!!!!     POT_G_EFF-part.1-core = Z_VAL*4\pi/q^2*(1-EXP(-q^2/4)) DIRACTLY     !!!!!!!!!!!!!!!!!!!!!!!!
+!     DO j=1, SIZE(PP%PSP,1)
+!        QQ=(j-1)*PP%PSGMAX/ SIZE(PP%PSP,1)
+!        POTPS_G(j) = (PP%ZVALF_ORIG)*4*PI0*FELECT/QQ/QQ*(1-EXP(-QQ*QQ/4*AUTOA*AUTOA))
+!     ENDDO
+!
+!!!!!!!!!!!!     POT_G-part.1-core = A*sin(q*rloc)/q FROM POT_G_EFF-part.1 DIRACTLY     !!!!!!!!!!!!!!!!!!!!!!!!
+!      DO j=1, PP%R%NMAX
+!         QQ=(j-1)*PP%PSGMAX/ SIZE(PP%PSP,1)
+!         PP%R%R(j) = QQ
+!         POTPS_G_EFF(j) = (PP%ZVALF_ORIG)*4*PI0*FELECT/QQ/QQ*(1-EXP(-QQ*QQ/4*AUTOA*AUTOA))
+!      ENDDO
+!      CALL GRAD(PP%R, POTPS_G_EFF, DPOTAE_EFF)
+!!      IMESH = 0
+!      IMESH = 277
+!
+!!      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX)/POTAEC(PP%R%NMAX)
+!      alpha = 1.0-DPOTAE_EFF(PP%R%NMAX-IMESH)/POTPS_G_EFF(PP%R%NMAX-IMESH)
+!!      WRITE(6,*) 'alpha= ', DPOTAE_EFF(PP%R%NMAX), POTAE_EFF(PP%R%NMAX), alpha
+!      beta = 1.0
+!
+!      CALL SOLVEBESL_Q(ROOT, alpha, beta, 0, 1)
+!!      WRITE(6,*) 'ROOT=' , ROOT(1), ROOT(2)
+!!      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX)
+!      QR = ROOT(1); Qloc = QR/PP%R%R(PP%R%NMAX-IMESH)
+!      alpha = POTPS_G_EFF(PP%R%NMAX-IMESH)*PP%R%R(PP%R%NMAX-IMESH)/sin(QR)
+!!      alpha = POTAE_EFF(PP%R%NMAX-41)*PP%R%R(PP%R%NMAX-41)/sin(QR)
+!!      WRITE(6,*) 'alpha=' , alpha
+!!      DO j = 1, PP%R%NMAX
+!      DO j = 1, PP%R%NMAX-IMESH
+!         QR = Qloc*PP%R%R(j)
+!         POTPS_G(j) = alpha*sin(QR)/PP%R%R(j)
+!!         WRITE(6,*) PP%R%R(j), POTPS_EFF(j), POTAE_EFF(j)
+!      ENDDO
+!
+!!!!!!!!!!!!     POT_G-part.2-valence = - 4\pi\rho_c(q)/q^2(1-exp(-q^2/4)) DIRACTLY     !!!!!!!!!!!!!!!!!!!!!!!!
+!
 !      DO j=1, SIZE(PP%PSP,1)
 !         QQ=(j-1)*PP%PSGMAX/ SIZE(PP%PSP,1)
-!         POTPS_G(j)=PP%PSPCOR(j)*4.0*PI0/QQ/QQ*(1-EXP(-QQ*QQ/4*AUTOA*AUTOA))
-!         WRITE(78,'(6f20.8)') PP%PSP(j,1), POTPS_G(j)
+!         POTPS_G(j)= POTPS_G(j)-PP%PSPCOR(j)*4*PI0*FELECT/QQ/QQ*(1-EXP(-QQ*QQ/4*AUTOA*AUTOA))
+!!          POTPS_G(j)= -PP%PSPCOR(j)*4*PI0*FELECT/QQ/QQ*(1-EXP(-QQ*QQ/1.2*AUTOA*AUTOA)) &
+!!     &     +        (PP%ZVALF_ORIG)*4*PI0*FELECT/QQ/QQ*(1-EXP(-QQ*QQ/4*AUTOA*AUTOA))
+!         WRITE(78,'(8f20.8)') PP%PSP(j,1),  POTPS_G(j)   !,  & 
+!!     & PP%PSP(j,2)+ PP%PSPCOR(j)*4*PI0*FELECT/QQ/QQ*(1-EXP(-QQ*QQ/4*AUTOA*AUTOA)), &
+!!     & PP%PSP(j,2)-PP%ZVALF_ORIG*4*PI0*FELECT/QQ/QQ*(1-EXP(-QQ*QQ/4*AUTOA*AUTOA)), &
+!!     &      (PP%ZVALF_ORIG)*4*PI0*FELECT/QQ/QQ*(1-EXP(-QQ*QQ/4*AUTOA*AUTOA))
+!                 
 !      ENDDO
+!
+!   ---------------- !!!!!! FOR CHECK !!!!! -------------------
+!      DO j=1, PP%R%NMAX
+!         PP%R%R(j) = FR%R(j)
+!      ENDDO
+!
+!      POTPSC_CHECK = 0.0
+!      CALL POTTORHO( PP%ZVALF_ORIG, NPSPTS, POTPS_G, PP%PSGMAX/NPSPTS, &
+!     &            .TRUE. , PP%R%NMAX, PP%R%R ,  POTPSC_CHECK )                        
+!
+!      DO j=1, PP%R%NMAX
+!         WRITE(22,'(6f20.8)') PP%R%R(j), PP%POTPSC(j), POTPSC_CHECK(j)
+!      ENDDO
+!   -----------------------------------------------------------------------------------------    !
+
 !   ---------------- !!!!!! POT IN RECIPROCAL SPACE FROM POTPSC !!!!!  ----------------------    !     
 
 !!      CALL FOURPOT_TO_Q( PP%RDEP, POT, PP%PSP(:,2), SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
@@ -624,11 +690,11 @@
      &             RHOPS_G, NPSRNL, PP%PSMAXN/NPSRNL, PP%R, IU6)
 !     &             RHOPS_G, NPSRNL, PP%PSMAXN/NPSRNL, PR, IU6)
          WRITE(IU25,*)
-         DO j=1, NPSNL
-            QQ=PP%PSMAXN/NPSNL*(j-1)
-            WRITE(78,'(6f20.8)')QQ, RHOPS_G(j)
-         ENDDO
-         WRITE(78,*)
+!         DO j=1, NPSNL
+!            QQ=PP%PSMAXN/NPSNL*(j-1)
+!            WRITE(78,'(6f20.8)')QQ, RHOPS_G(j)
+!         ENDDO
+!         WRITE(78,*)
       ENDDO
 
 !             WRITE(IU19,*)
