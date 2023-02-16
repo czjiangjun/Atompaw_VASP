@@ -509,6 +509,7 @@
       DO j=1, PP%R%NMAX
          POTPSC_CHECK(j) = PP%RHOPS(j)/SCALE/PP%R%R(j)/PP%R%R(j)
       ENDDO
+!      CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), PP%POTPSC,   &
       CALL FOURPOT_TO_Q( PP%R%R(PP%R%NMAX), POTPSC_CHECK,   &
      &             CORPS_G, SIZE(PP%PSP,1), PP%PSGMAX/ SIZE(PP%PSP,1), PP%R, IU6)
 
